@@ -73,6 +73,7 @@ public static class ScreenReaderHelperBehavior
 			{
 				if (enabled)
 				{
+					Util.PerfProbe.Count("ListItem container created");
 					element.DataContextChanged += Element_DataContextChanged;
 					if (element.DataContext != null)
 					{
@@ -93,6 +94,9 @@ public static class ScreenReaderHelperBehavior
 		{
 			return;
 		}
+		var __probe = Util.PerfProbe.Begin();
+		try
+		{
 		DependencyObject depObj = sender as DependencyObject;
 		var t = e.NewValue.GetType();
 		var attributes = t.GetCustomAttributes(typeof(ScreenReaderHelperAttribute), true);
@@ -128,6 +132,11 @@ public static class ScreenReaderHelperBehavior
 					}
 				}
 			}
+		}
+		}
+		finally
+		{
+			Util.PerfProbe.End("ScreenReader reflection (per row bind)", __probe);
 		}
 	}
 }

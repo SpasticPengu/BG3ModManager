@@ -122,9 +122,9 @@ public static class ElementHelper
 
 				totalWidth += width;
 			}
-			catch (Exception ex)
+			catch (Exception)
 			{
-				DivinityApp.Log($"Error measuring text:\n{ex}");
+				PerfProbe.Count("MeasureText glyph miss (throws per CHARACTER)");
 			}
 		}
 

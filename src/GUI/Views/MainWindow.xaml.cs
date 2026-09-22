@@ -383,6 +383,12 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 			DivinityApp.Log("Enable logging due to the debug file next to the exe.");
 		}
 
+		if (File.Exists(Path.Join(AppDomain.CurrentDomain.BaseDirectory, "perfprobe")))
+		{
+			Util.PerfProbe.Start();
+			Application.Current.Exit += (o, e) => Util.PerfProbe.Stop();
+		}
+
 		_hwnd = new System.Windows.Interop.WindowInteropHelper(this);
 
 		Application.Current.DispatcherUnhandledException += OnUIException;

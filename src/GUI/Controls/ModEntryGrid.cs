@@ -11,6 +11,7 @@ public class ModEntryGrid : Grid
 
 	protected override AutomationPeer OnCreateAutomationPeer()
 	{
+		Util.PerfProbe.Count("AutomationPeer created (ModEntryGrid)");
 		return new ModEntryGridAutomationPeer(this);
 	}
 }
