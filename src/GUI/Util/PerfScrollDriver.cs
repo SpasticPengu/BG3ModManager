@@ -109,7 +109,7 @@ public static class PerfScrollDriver
 		var sibling = row?.FindVisualChildren<TextBlock>().FirstOrDefault(t => !IsInside(t, grid));
 		static string Describe(DependencyObject e) => e == null ? "<none>"
 			: $"{e.GetType().Name}: {TextElement.GetFontFamily(e)} {TextElement.GetFontSize(e)} {TextElement.GetFontWeight(e)} {TextElement.GetFontStyle(e)} "
-				+ $"{TextElement.GetFontStretch(e)} fg={TextElement.GetForeground(e)} mode={TextOptions.GetTextFormattingMode(e)} lang={e.GetValue(FrameworkElement.LanguageProperty)}";
+				+ $"{TextElement.GetFontStretch(e)} fg={TextElement.GetForeground(e)} (frozen {TextElement.GetForeground(e)?.IsFrozen}) mode={TextOptions.GetTextFormattingMode(e)} lang={e.GetValue(FrameworkElement.LanguageProperty)}";
 		DivinityApp.Log($"[PerfScroll] name cell renders with  {Describe(name)}");
 		DivinityApp.Log($"[PerfScroll] sibling cell renders with {Describe(sibling)}");
 	}

@@ -119,7 +119,7 @@ public static class PerfProbe
 		Record(name, Stopwatch.GetTimestamp() - start);
 	}
 
-	private static void Record(string name, long elapsed)
+	public static void Record(string name, long elapsed)
 	{
 		if (!enabled) return;
 		lock (sync)
