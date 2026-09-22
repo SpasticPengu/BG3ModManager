@@ -27,22 +27,84 @@ public static class PerfProbe
 
 	public static bool Enabled => enabled;
 
-	public static void Start()
+	/// <summary>
+	/// Experiment flags, read from the contents of the "perfprobe" file (comma or whitespace
+	/// separated). Lets one build run several A/B variants without editing XAML between runs.
+	/// </summary>
+	public static string Variant { get; private set; } = "";
+	private static HashSet<string> variantFlags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+	public static bool Has(string flag) => enabled && variantFlags.Contains(flag);
+
+	/// <summary>Set false while a scripted workload runs, so it lands in one summary instead of 5s slices.</summary>
+	public static bool PeriodicDumps { get; set; } = true;
+
+	private static readonly Stack<long> opStarts = new Stack<long>();
+
+	public static void Start(string variant = "")
 	{
 		if (enabled) return;
 		enabled = true;
+		variantFlags = new HashSet<string>((variant ?? "").Split([',', ' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries), StringComparer.OrdinalIgnoreCase);
+		Variant = variantFlags.Count > 0 ? String.Join(",", variantFlags.OrderBy(x => x)) : "baseline";
 		lastFrameStamp = 0;
 		lastDumpStamp = Stopwatch.GetTimestamp();
 		CompositionTarget.Rendering += OnRendering;
-		DivinityApp.Log("[PerfProbe] active - scroll the list, then close the app for a summary.");
+		// Layout and rendering for a frame both run inside one Render-priority dispatcher operation,
+		// so timing those operations captures the whole per-frame cost no matter which element the
+		// layout manager starts from - unlike the per-override probes, which only see what is routed
+		// through the overridden element.
+		var hooks = System.Windows.Threading.Dispatcher.CurrentDispatcher.Hooks;
+		hooks.OperationStarted += OnOperationStarted;
+		hooks.OperationCompleted += OnOperationCompleted;
+		DivinityApp.Log($"[PerfProbe] active (variant: {Variant}) - scroll the list, then close the app for a summary.");
 	}
 
 	public static void Stop()
 	{
 		if (!enabled) return;
 		CompositionTarget.Rendering -= OnRendering;
+		var hooks = System.Windows.Threading.Dispatcher.CurrentDispatcher.Hooks;
+		hooks.OperationStarted -= OnOperationStarted;
+		hooks.OperationCompleted -= OnOperationCompleted;
 		enabled = false;
 		Dump("final");
+	}
+
+	private static void OnOperationStarted(object sender, System.Windows.Threading.DispatcherHookEventArgs e)
+	{
+		opStarts.Push(Stopwatch.GetTimestamp());
+	}
+
+	private static void OnOperationCompleted(object sender, System.Windows.Threading.DispatcherHookEventArgs e)
+	{
+		if (opStarts.Count == 0) return;
+		var start = opStarts.Pop();
+		// Only outermost operations - a nested one is already inside its parent's time.
+		if (opStarts.Count > 0) return;
+		Record(e.Operation.Priority == System.Windows.Threading.DispatcherPriority.Render
+			? "UI thread: Render ops (layout+render)"
+			: "UI thread: other dispatcher ops", Stopwatch.GetTimestamp() - start);
+	}
+
+	private static readonly Dictionary<string, int> stackSamples = new Dictionary<string, int>();
+
+	/// <summary>
+	/// Logs the call stack on the Nth, 2Nth... hit of <paramref name="label"/>, at most
+	/// <paramref name="max"/> times. Shows which code path is entering a timed method.
+	/// </summary>
+	public static void SampleStack(string label, int every, int max = 2)
+	{
+		if (!enabled) return;
+		stackSamples.TryGetValue(label, out var n);
+		stackSamples[label] = ++n;
+		if (n % every != 0 || n / every > max) return;
+		var frames = new StackTrace(1, false).GetFrames()
+			.Select(f => f.GetMethod())
+			.Where(m => m != null)
+			.Take(40)
+			.Select(m => $"      {m.DeclaringType?.Name}.{m.Name}");
+		DivinityApp.Log($"[PerfProbe:stack] {label} (hit {n})\n{String.Join("\n", frames)}");
 	}
 
 	/// <summary>Returns a timestamp to pass to <see cref="End"/>, or 0 when disabled.</summary>
@@ -54,7 +116,12 @@ public static class PerfProbe
 	public static void End(string name, long start)
 	{
 		if (!enabled || start == 0L) return;
-		var elapsed = Stopwatch.GetTimestamp() - start;
+		Record(name, Stopwatch.GetTimestamp() - start);
+	}
+
+	private static void Record(string name, long elapsed)
+	{
+		if (!enabled) return;
 		lock (sync)
 		{
 			counts.TryGetValue(name, out var c);
@@ -96,7 +163,7 @@ public static class PerfProbe
 		}
 		lastFrameStamp = now;
 
-		if ((now - lastDumpStamp) * TicksToMs > 5000.0)
+		if (PeriodicDumps && (now - lastDumpStamp) * TicksToMs > 5000.0)
 		{
 			lastDumpStamp = now;
 			Dump("5s");
@@ -120,7 +187,7 @@ public static class PerfProbe
 		}
 
 		var sb = new StringBuilder();
-		sb.AppendLine($"[PerfProbe:{label}] ----------------------------------------");
+		sb.AppendLine($"[PerfProbe:{label}] variant={Variant} ----------------------------------------");
 
 		// Spiky frame times usually mean GC, so always report collections since the last dump.
 		var g0 = GC.CollectionCount(0);

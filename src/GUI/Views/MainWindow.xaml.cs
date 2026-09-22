@@ -383,10 +383,15 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 			DivinityApp.Log("Enable logging due to the debug file next to the exe.");
 		}
 
-		if (File.Exists(Path.Join(AppDomain.CurrentDomain.BaseDirectory, "perfprobe")))
+		var perfProbeFile = Path.Join(AppDomain.CurrentDomain.BaseDirectory, "perfprobe");
+		if (File.Exists(perfProbeFile))
 		{
-			Util.PerfProbe.Start();
+			Util.PerfProbe.Start(File.ReadAllText(perfProbeFile));
 			Application.Current.Exit += (o, e) => Util.PerfProbe.Stop();
+			if (File.Exists(Path.Join(AppDomain.CurrentDomain.BaseDirectory, "perfscroll")))
+			{
+				Util.PerfScrollDriver.Start();
+			}
 		}
 
 		_hwnd = new System.Windows.Interop.WindowInteropHelper(this);
