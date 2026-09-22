@@ -716,7 +716,7 @@
 				<ColumnDefinition Width="*" />
 				<ColumnDefinition Width="Auto" />
 			</controls:ModEntryGrid.ColumnDefinitions>
-			<TextBlock x:Name="ModNameText"
+			<controls:CachedTextBlock x:Name="ModNameText"
 			    HorizontalAlignment="Stretch"
 			    Tag="{Binding}"
 			    Text="{Binding DisplayName}"

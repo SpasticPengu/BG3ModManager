@@ -2,7 +2,6 @@
 
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
-using System.Windows.Controls;
 
 namespace DivinityModManager.Util.ScreenReader;
 
@@ -28,7 +27,7 @@ public class ModEntryGridAutomationPeer : CachedAutomationPeer
 
 	override public bool HasNullChildElement()
 	{
-		var text = ElementHelper.FindChild<TextBlock>(grid, "ModNameText");
+		var text = ElementHelper.FindChild<CachedTextBlock>(grid, "ModNameText");
 		if (text != null)
 		{
 			var peer = UIElementAutomationPeer.CreatePeerForElement(text);
