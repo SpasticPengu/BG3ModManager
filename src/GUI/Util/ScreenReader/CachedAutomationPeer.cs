@@ -68,14 +68,22 @@ public class CachedAutomationPeer : FrameworkElementAutomationPeer
 
 	protected override List<AutomationPeer> GetChildrenCore()
 	{
-		if (HasNullChildElement())
+		var probe = DivinityModManager.Util.PerfProbe.Begin();
+		try
 		{
+			if (HasNullChildElement())
+			{
+				return _cachedAutomationPeers;
+			}
+			else
+			{
+				_cachedAutomationPeers = GetPeersFromElements();
+			}
 			return _cachedAutomationPeers;
 		}
-		else
+		finally
 		{
-			_cachedAutomationPeers = GetPeersFromElements();
+			DivinityModManager.Util.PerfProbe.End("AutomationPeer.GetChildren (walks subtree)", probe);
 		}
-		return _cachedAutomationPeers;
 	}
 }

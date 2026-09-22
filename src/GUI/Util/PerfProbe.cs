@@ -130,6 +130,11 @@ public static class PerfProbe
 			+ $"  |  heap {GC.GetTotalMemory(false) / 1048576.0:F0} MB");
 		lastGen0 = g0; lastGen1 = g1; lastGen2 = g2;
 
+		// If this is true, WPF does accessibility bookkeeping during layout, and the custom peers
+		// on every row walk the whole visual subtree to answer it.
+		sb.AppendLine("  UI Automation clients listening: "
+			+ System.Windows.Automation.Provider.AutomationInteropProvider.ClientsAreListening);
+
 		if (gaps.Count > 0)
 		{
 			gaps.Sort();
