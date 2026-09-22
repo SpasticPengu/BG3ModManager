@@ -872,7 +872,7 @@
 					</DataTemplate>
 				</GridViewColumn.CellTemplate>
 			</GridViewColumn>
-			<GridViewColumn Width="Auto" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
+			<GridViewColumn Width="100" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
 				<GridViewColumn.CellTemplate>
 					<DataTemplate>
 						<TextBlock Text="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeColumnFormat}}" ToolTip="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeTooltipFormat}}" />
@@ -921,7 +921,7 @@
 					</DataTemplate>
 				</GridViewColumn.CellTemplate>
 			</GridViewColumn>
-			<GridViewColumn Width="Auto" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
+			<GridViewColumn Width="100" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
 				<GridViewColumn.CellTemplate>
 					<DataTemplate>
 						<TextBlock Text="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeColumnFormat}}" ToolTip="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeTooltipFormat}}" />
@@ -953,7 +953,7 @@
 					</DataTemplate>
 				</GridViewColumn.CellTemplate>
 			</GridViewColumn>
-			<GridViewColumn Width="Auto" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
+			<GridViewColumn Width="100" Header="Last Updated" HeaderTemplate="{StaticResource GridViewTextblockHeaderTemplate}">
 				<GridViewColumn.CellTemplate>
 					<DataTemplate>
 						<TextBlock Text="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeColumnFormat}}" ToolTip="{Binding LastUpdated, StringFormat={x:Static dapp:DivinityApp.DateTimeTooltipFormat}}" />
