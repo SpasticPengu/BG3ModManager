@@ -716,7 +716,7 @@
 			    ToolTip="{StaticResource ModToolTip}"
 			    ToolTipService.IsEnabled="{Binding HasToolTip}" />
 			<Border Grid.Column="1" Padding="0,0,4,0" BorderThickness="0">
-				<StackPanel Orientation="Horizontal">
+				<controls:ProbeStackPanel Orientation="Horizontal">
 					<Image Width="16"
 					    Height="16"
 					    MaxWidth="16"
@@ -821,7 +821,7 @@
 							</Style>
 						</Image.Style>
 					</Image>
-				</StackPanel>
+				</controls:ProbeStackPanel>
 			</Border>
 		</controls:ModEntryGrid>
 	</DataTemplate>
