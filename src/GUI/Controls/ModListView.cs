@@ -194,6 +194,16 @@ public class ModListView : ListView
 		_isSingleSelect = false;
 	}
 
+	/// <summary>
+	/// Replaces the whole selection in a single batched update, for items that may not have a
+	/// realized container. Adding to SelectedItems one item at a time raises SelectionChanged per
+	/// item, which is O(n^2) once a handler walks the list; Selector.SetSelectedItems raises it once.
+	/// </summary>
+	public void SetSelection(IEnumerable items)
+	{
+		SetSelectedItems(items);
+	}
+
 	private void NameColumnWidthChanged(object sender, EventArgs e)
 	{
 		if (!Resizing)

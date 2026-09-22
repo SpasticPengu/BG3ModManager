@@ -182,30 +182,31 @@ public partial class HorizontalModLayout : HorizontalModLayoutBase, IModViewLayo
 		this.ForceLoadedModsListView.ClearSelectedItems();
 	}
 
+	private ModListView GetListViewFor(DivinityModData mod)
+	{
+		if (mod.IsForceLoaded && !mod.IsForceLoadedMergedMod && !mod.ForceAllowInLoadOrder)
+		{
+			return ForceLoadedModsListView;
+		}
+		return mod.IsActive ? ActiveModsListView : InactiveModsListView;
+	}
+
 	public void SelectMods(IEnumerable<DivinityModData> mods)
 	{
-		if (mods != null)
+		if (mods == null) return;
+
+		//This used to go through ItemContainerGenerator.ContainerFromItem, which returns null for
+		//any mod without a realized container. Under UI virtualization that silently skipped every
+		//mod scrolled out of view, so after moving a large selection between lists the models were
+		//all flagged selected while the ListView only knew about the visible ones. The two then
+		//disagreed permanently, which is the "deselecting doesn't clear the off-screen mods" bug.
+		//SelectedItems is data-level and does not care whether a container exists.
+		foreach (var group in mods.GroupBy(GetListViewFor))
 		{
-			foreach (var mod in mods)
-			{
-				ModListView listView = null;
-				if (mod.IsForceLoaded && !mod.IsForceLoadedMergedMod && !mod.ForceAllowInLoadOrder)
-				{
-					listView = ForceLoadedModsListView;
-				}
-				else if (mod.IsActive)
-				{
-					listView = ActiveModsListView;
-				}
-				else
-				{
-					listView = InactiveModsListView;
-				}
-				if (listView.ItemContainerGenerator.ContainerFromItem(mod) is ListViewItem listItem)
-				{
-					listItem.IsSelected = mod.Visibility == Visibility.Visible;
-				}
-			}
+			if (group.Key == null) continue;
+
+			var selectable = group.Where(x => x.Visibility == Visibility.Visible).ToList();
+			group.Key.SetSelection(selectable);
 		}
 	}
 
