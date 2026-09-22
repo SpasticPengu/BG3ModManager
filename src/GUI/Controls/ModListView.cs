@@ -208,7 +208,34 @@ public class ModListView : ListView
 
 	protected override AutomationPeer OnCreateAutomationPeer()
 	{
+		Util.PerfProbe.Count("AutomationPeer created (ModListView)");
 		return new ModListViewAutomationPeer(this);
+	}
+
+	protected override Size MeasureOverride(Size constraint)
+	{
+		var probe = Util.PerfProbe.Begin();
+		try
+		{
+			return base.MeasureOverride(constraint);
+		}
+		finally
+		{
+			Util.PerfProbe.End("ModListView.Measure (whole list)", probe);
+		}
+	}
+
+	protected override Size ArrangeOverride(Size arrangeBounds)
+	{
+		var probe = Util.PerfProbe.Begin();
+		try
+		{
+			return base.ArrangeOverride(arrangeBounds);
+		}
+		finally
+		{
+			Util.PerfProbe.End("ModListView.Arrange (whole list)", probe);
+		}
 	}
 
 	private int GetColumnActualIndex(GridViewColumn col)

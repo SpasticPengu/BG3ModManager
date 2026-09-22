@@ -215,6 +215,17 @@ public partial class HorizontalModLayout : HorizontalModLayoutBase, IModViewLayo
 		{
 			var targetUUIDs = list.Select(x => x.UUID).ToHashSet();
 
+			if (Util.PerfProbe.Enabled)
+			{
+				var before = list.Count(x => x.IsSelected);
+				var srcName = (e.Source as System.Windows.Controls.ListView)?.Name ?? "?";
+				var srcSel = (e.Source as System.Windows.Controls.ListView)?.SelectedItems.Count ?? -1;
+				var notInTarget = e.RemovedItems?.Cast<DivinityModData>().Count(x => !targetUUIDs.Contains(x.UUID)) ?? 0;
+				Util.PerfProbe.Note($"SelectionChanged on {srcName}: removed={e.RemovedItems?.Count ?? 0} "
+					+ $"added={e.AddedItems?.Count ?? 0} ListView.SelectedItems={srcSel} "
+					+ $"models-with-IsSelected-before={before} removed-not-in-target-list={notInTarget}");
+			}
+
 			if (e.RemovedItems != null && e.RemovedItems.Count > 0)
 			{
 				foreach (var removedItem in e.RemovedItems.Cast<DivinityModData>())
@@ -232,6 +243,13 @@ public partial class HorizontalModLayout : HorizontalModLayoutBase, IModViewLayo
 				{
 					addedItem.IsSelected = true;
 				}
+			}
+
+			if (Util.PerfProbe.Enabled)
+			{
+				var after = list.Count(x => x.IsSelected);
+				Util.PerfProbe.Note($"  -> models-with-IsSelected-after={after} "
+					+ $"(if this stays high after clicking one mod, the stale ones are the bug)");
 			}
 		}
 	}

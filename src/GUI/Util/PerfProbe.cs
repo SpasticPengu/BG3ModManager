@@ -19,6 +19,9 @@ public static class PerfProbe
 	private static bool enabled;
 	private static long lastFrameStamp;
 	private static long lastDumpStamp;
+	private static int lastGen0;
+	private static int lastGen1;
+	private static int lastGen2;
 
 	private static readonly double TicksToMs = 1000.0 / Stopwatch.Frequency;
 
@@ -71,6 +74,13 @@ public static class PerfProbe
 		}
 	}
 
+	/// <summary>A one-off diagnostic line, emitted immediately rather than aggregated.</summary>
+	public static void Note(string message)
+	{
+		if (!enabled) return;
+		DivinityApp.Log($"[PerfProbe:note] {message}");
+	}
+
 	private static void OnRendering(object sender, EventArgs e)
 	{
 		var now = Stopwatch.GetTimestamp();
@@ -111,6 +121,14 @@ public static class PerfProbe
 
 		var sb = new StringBuilder();
 		sb.AppendLine($"[PerfProbe:{label}] ----------------------------------------");
+
+		// Spiky frame times usually mean GC, so always report collections since the last dump.
+		var g0 = GC.CollectionCount(0);
+		var g1 = GC.CollectionCount(1);
+		var g2 = GC.CollectionCount(2);
+		sb.AppendLine($"  GC since last dump: gen0 {g0 - lastGen0}, gen1 {g1 - lastGen1}, gen2 {g2 - lastGen2}"
+			+ $"  |  heap {GC.GetTotalMemory(false) / 1048576.0:F0} MB");
+		lastGen0 = g0; lastGen1 = g1; lastGen2 = g2;
 
 		if (gaps.Count > 0)
 		{
