@@ -226,22 +226,46 @@ public partial class HorizontalModLayout : HorizontalModLayoutBase, IModViewLayo
 					+ $"models-with-IsSelected-before={before} removed-not-in-target-list={notInTarget}");
 			}
 
-			if (e.RemovedItems != null && e.RemovedItems.Count > 0)
+			//Reconcile against the ListView's own SelectedItems rather than replaying
+			//e.RemovedItems. Under UI virtualization a previously-selected mod that has been
+			//scrolled out of view is not reliably reported as removed, so the delta can miss it
+			//and leave it stuck selected. Reading the current selection instead makes this pass
+			//self-correcting, and also survives the handler running a dispatcher frame late via
+			//ObserveOn. See DivinityModData.IsSelected - it still refuses to become true while
+			//the mod is filtered out, so hidden mods cannot be selected here either.
+			if (e.Source is System.Windows.Controls.ListView sourceView)
 			{
-				foreach (var removedItem in e.RemovedItems.Cast<DivinityModData>())
+				var selectedUUIDs = sourceView.SelectedItems.OfType<DivinityModData>()
+					.Select(x => x.UUID).ToHashSet();
+
+				foreach (var mod in list)
 				{
-					if (targetUUIDs.Contains(removedItem.UUID))
+					var shouldBeSelected = selectedUUIDs.Contains(mod.UUID);
+					if (mod.IsSelected != shouldBeSelected)
 					{
-						removedItem.IsSelected = false;
+						mod.IsSelected = shouldBeSelected;
 					}
 				}
 			}
-
-			if (e.AddedItems != null && e.AddedItems.Count > 0)
+			else
 			{
-				foreach (var addedItem in e.AddedItems.Cast<DivinityModData>())
+				if (e.RemovedItems != null && e.RemovedItems.Count > 0)
 				{
-					addedItem.IsSelected = true;
+					foreach (var removedItem in e.RemovedItems.Cast<DivinityModData>())
+					{
+						if (targetUUIDs.Contains(removedItem.UUID))
+						{
+							removedItem.IsSelected = false;
+						}
+					}
+				}
+
+				if (e.AddedItems != null && e.AddedItems.Count > 0)
+				{
+					foreach (var addedItem in e.AddedItems.Cast<DivinityModData>())
+					{
+						addedItem.IsSelected = true;
+					}
 				}
 			}
 
