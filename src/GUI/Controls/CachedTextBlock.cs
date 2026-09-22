@@ -100,6 +100,7 @@ public class CachedTextBlock : FrameworkElement
 
 	private ShapeKey _key;
 	private ShapedText _shaped;
+	private Brush _renderBrush;
 
 	protected override Size MeasureOverride(Size availableSize)
 	{
@@ -110,7 +111,7 @@ public class CachedTextBlock : FrameworkElement
 
 	protected override void OnRender(DrawingContext drawingContext)
 	{
-		var foreground = Foreground;
+		var foreground = GetRenderBrush();
 		if (foreground == null) return;
 
 		var key = CreateKey();
@@ -154,6 +155,54 @@ public class CachedTextBlock : FrameworkElement
 			InvalidateMeasure();
 			InvalidateVisual();
 		}
+		else if (e.Property == ForegroundProperty)
+		{
+			if (e.OldValue is Brush { IsFrozen: false } oldBrush)
+			{
+				WeakEventManager<Freezable, EventArgs>.RemoveHandler(oldBrush, nameof(Freezable.Changed), OnForegroundBrushChanged);
+			}
+			if (e.NewValue is Brush { IsFrozen: false } newBrush)
+			{
+				WeakEventManager<Freezable, EventArgs>.AddHandler(newBrush, nameof(Freezable.Changed), OnForegroundBrushChanged);
+			}
+			_renderBrush = null;
+		}
+	}
+
+	/// <summary>
+	/// The brush to draw with: Foreground itself if it is frozen, otherwise a frozen snapshot of it.
+	/// <para>
+	/// A drawing that uses an unfrozen brush registers with that brush when it is put on screen,
+	/// and the drawing it replaces unregisters - at a cost that grows with the number of elements
+	/// sharing the brush (RenderData.PropagateChangedHandler). Theme brushes are shared by the whole
+	/// window and stay unfrozen so colour schemes can switch, which made that swap, not the text,
+	/// the bulk of every redraw. The snapshot is dropped whenever the brush changes in place (a
+	/// theme switch) through one weak subscription per element, taken only when Foreground changes.
+	/// </para>
+	/// </summary>
+	private Brush GetRenderBrush()
+	{
+		var foreground = Foreground;
+		if (foreground == null || foreground.IsFrozen) return foreground;
+		if (_renderBrush == null)
+		{
+			try
+			{
+				_renderBrush = (Brush)foreground.GetCurrentValueAsFrozen();
+			}
+			catch (InvalidOperationException)
+			{
+				// Not freezable (a VisualBrush over live content, say): draw it directly.
+				_renderBrush = foreground;
+			}
+		}
+		return _renderBrush;
+	}
+
+	private void OnForegroundBrushChanged(object sender, EventArgs e)
+	{
+		_renderBrush = null;
+		InvalidateVisual();
 	}
 
 	protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
