@@ -79,7 +79,7 @@
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Publish' or '$(Configuration)' == 'PublishTest'">
-		<PreBuildEvent>rd /s /q $(TargetDir)_Lib</PreBuildEvent>
+		<PreBuildEvent>if exist "$(TargetDir)_Lib" rd /s /q "$(TargetDir)_Lib"</PreBuildEvent>
 	</PropertyGroup>
 
 	<Target Name="CrossSpeakLibraryFiles" AfterTargets="AfterBuild">
