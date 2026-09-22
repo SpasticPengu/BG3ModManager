@@ -231,7 +231,7 @@ public class ModListView : ListView
 		}
 		finally
 		{
-			Util.PerfProbe.End("ModListView.Measure (whole list)", probe);
+			Util.PerfProbe.End($"Measure {ProbeName}", probe);
 		}
 	}
 
@@ -244,9 +244,15 @@ public class ModListView : ListView
 		}
 		finally
 		{
-			Util.PerfProbe.End("ModListView.Arrange (whole list)", probe);
+			Util.PerfProbe.End($"Arrange {ProbeName}", probe);
 		}
 	}
+
+	//There are five ModListView instances, two of them hidden header copies. Aggregating them
+	//under one label hides which list is actually costing the time.
+	private string ProbeName => String.IsNullOrEmpty(Name)
+		? (HideHeader ? "<headerless copy>" : "<unnamed>")
+		: Name;
 
 	private int GetColumnActualIndex(GridViewColumn col)
 	{
