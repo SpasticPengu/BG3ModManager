@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BG3MM Fork — Plan Overview</title>
+<style>
+  :root{
+    --bg:#0f1420; --card:#18202f; --card2:#1e2738; --ink:#eef2f8; --muted:#94a0b4;
+    --line:#2a3447;
+    --teal:#2dd4bf; --green:#34d399; --amber:#fbbf24; --blue:#60a5fa; --grey:#7c8aa3;
+    --red:#f87171;
+  }
+  @media (prefers-color-scheme:light){
+    :root:not([data-theme="dark"]){
+      --bg:#eef2f8; --card:#fff; --card2:#f6f8fc; --ink:#101726; --muted:#5a6780;
+      --line:#d8e0ec;
+      --teal:#0d9488; --green:#059669; --amber:#b45309; --blue:#2563eb; --grey:#64748b;
+      --red:#dc2626;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#eef2f8; --card:#fff; --card2:#f6f8fc; --ink:#101726; --muted:#5a6780;
+    --line:#d8e0ec;
+    --teal:#0d9488; --green:#059669; --amber:#b45309; --blue:#2563eb; --grey:#64748b;
+    --red:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 16px 60px}
+  .hero{background:linear-gradient(135deg,#0d9488,#2563eb);border-radius:16px;
+    padding:22px 26px;margin-bottom:22px;color:#fff}
+  .hero h1{margin:0 0 6px;font-size:1.5rem;letter-spacing:-.02em}
+  .hero .goal{margin:0;opacity:.95;font-size:1rem}
+  .hero .strip{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;font-size:.8rem}
+  .hero .strip b{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);
+    border-radius:999px;padding:3px 12px;font-weight:600}
+  .alert{background:var(--card);border:1px solid var(--red);border-left:5px solid var(--red);
+    border-radius:10px;padding:14px 18px;margin-bottom:22px}
+  .alert h3{margin:0 0 4px;font-size:.95rem;color:var(--red)}
+  .alert p{margin:0;color:var(--muted);font-size:.9rem}
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:14px}
+  .col{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .col h2{margin:0 0 10px;font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;
+    display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .c-done h2{color:var(--green)} .c-done .dot{background:var(--green)}
+  .c-test h2{color:var(--amber)} .c-test .dot{background:var(--amber)}
+  .c-prog h2{color:var(--blue)}  .c-prog .dot{background:var(--blue)}
+  .c-next h2{color:var(--grey)}  .c-next .dot{background:var(--grey)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:9px;
+    padding:11px 13px;margin-bottom:9px}
+  .card .t{font-weight:650;font-size:.9rem;margin-bottom:3px}
+  .card .d{color:var(--muted);font-size:.82rem;line-height:1.45}
+  .card .chips{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font-size:.68rem;font-weight:700;border-radius:999px;padding:2px 8px;
+    border:1px solid currentColor;letter-spacing:.03em}
+  .chip.up{color:var(--green)} .chip.fork{color:var(--amber)}
+  .chip.block{color:var(--red)} .chip.hash{color:var(--muted);font-family:ui-monospace,Consolas,monospace}
+  .empty{color:var(--muted);font-size:.82rem;font-style:italic;opacity:.65;padding:6px 2px}
+  .test{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:18px 22px;margin-top:22px}
+  .test h2{margin:0 0 4px;font-size:1rem}
+  .test .sub{color:var(--muted);font-size:.85rem;margin:0 0 12px}
+  .test ul{list-style:none;margin:0;padding:0}
+  .test li{padding:7px 0 7px 30px;position:relative;border-bottom:1px solid var(--line);
+    font-size:.9rem}
+  .test li:last-child{border-bottom:none}
+  .test li::before{content:"";position:absolute;left:4px;top:10px;width:15px;height:15px;
+    border:2px solid var(--muted);border-radius:4px}
+  a{color:var(--teal)}
+  footer{margin-top:22px;text-align:center;color:var(--muted);font-size:.82rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <h1>BG3 Mod Manager &mdash; Fork Roadmap</h1>
+    <p class="goal"><strong>Stage 0 done. Scroll performance half-solved.</strong>
+       The app builds and runs against the real 1&nbsp;121-mod setup. The scroll lag has been
+       measured down to a single line of the mod row &mdash; four wrong theories eliminated with
+       numbers rather than argument.</p>
+    <div class="strip">
+      <b>Base: upstream/master (WPF)</b>
+      <b>Branches: master &middot; fork/main &middot; fix/*</b>
+      <b>2 commits on fix/publish-prebuild-quoting</b>
+      <b>Windows now, Linux open</b>
+      <b>2026-09-23</b>
+    </div>
+  </div>
+
+  <div class="alert" style="border-color:var(--green);border-left-color:var(--green)">
+    <h3 style="color:var(--green)">Mod-name cost found and fixed &mdash; 220 &rarr; 21&nbsp;&micro;s per row</h3>
+    <p>The name text in each row was the most expensive thing on screen for two reasons, both now
+       fixed on <code>perf/list-render</code>. WPF re-did the work of <em>shaping</em> every name each
+       time a row scrolled into view (twice). And every redraw paid a bookkeeping toll to the
+       theme's shared text colour. A new text element shapes each name once and draws with a frozen
+       copy of the colour. Measured with a scripted scroll, alternating old and new builds: the
+       name costs <strong>90% less</strong>, a thumb-drag frame drops from 33 to 25&nbsp;ms of work,
+       and frames that stutter past 33&nbsp;ms are halved. The shared tooltip &mdash; the old prime
+       suspect &mdash; was tested and ruled out.</p>
+  </div>
+
+  <div class="board">
+
+    <div class="col c-done">
+      <h2><span class="dot"></span>Done</h2>
+      <div class="card">
+        <div class="t">0 &middot; Toolchain &amp; first build</div>
+        <div class="d">All of it: the missing Build Tools component is installed and proven, the
+          release build runs twice in a row from a clean slate, and the app has been launched against
+          the real mod folder with the numbers written down.</div>
+        <div class="chips"><span class="chip hash">complete</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Baseline recorded</div>
+        <div class="d">1&nbsp;121 mods, 935 in the active order. Cold start to usable:
+          <strong>~15 s</strong>, of which <strong>9.3 s</strong> is loading mods. 478&nbsp;MB memory.
+          These are the control numbers for stages 4&ndash;6.</div>
+        <div class="chips"><span class="chip hash">Debug build</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Branch structure set up</div>
+        <div class="d"><code>master</code> stays clean, <code>fork/main</code> is the fork's own line,
+          and upstreamable fixes are cut from <code>master</code> so a PR contains only the fix.</div>
+        <div class="chips"><span class="chip hash">fork/main</span><span class="chip hash">fix/*</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Codebase survey</div>
+        <div class="d">Whole repo mapped into CLAUDE.md &mdash; build traps, ReactiveUI rules, the BG3
+          domain, fork hazards.</div>
+        <div class="chips"><span class="chip hash">CLAUDE.md</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Direction settled</div>
+        <div class="d">Stay on WPF master. Windows first, Linux kept open. Bugfixes kept
+          upstreamable.</div>
+      </div>
+    </div>
+
+    <div class="col c-test">
+      <h2><span class="dot"></span>Testing</h2>
+      <div class="card">
+        <div class="t">6.1 &middot; Mod-name cost fixed</div>
+        <div class="d">Committed and measured: <strong>220 &rarr; 21&nbsp;&micro;s per row</strong>, frame work
+          33 &rarr; 25&nbsp;ms at thumb-drag speed, stutter frames halved. Pixel-identical to the old
+          text across all 936 names, four render setups and theme recolours. Needs your eyes: see
+          "What to verify".</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip hash">2858a235</span><span class="chip hash">7fa83473</span></div>
+      </div>
+      <div class="card">
+        <div class="t">0.2 &middot; Pre-build fix</div>
+        <div class="d">Committed and proven: two release builds back to back from an empty output
+          folder, and a file planted in the shared-library folder between them is correctly wiped.</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip hash">5f8a80a9</span></div>
+      </div>
+      <div class="card">
+        <div class="t">The bug was mis-diagnosed twice</div>
+        <div class="d">It never failed the build, and it never left stale files either. The path it was
+          given was always empty, and the command happened to run in the right folder anyway &mdash;
+          two mistakes cancelling out. The fix makes it deliberate instead of accidental.</div>
+        <div class="chips"><span class="chip block">corrected</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Searching is slower than we thought</div>
+        <div class="d">We assumed the built-in half-second delay was the problem. It is not &mdash;
+          a search takes <strong>1.7&ndash;3.8 s</strong>, and even one matching nothing costs over a
+          second of real work. Stage 5's plan needs rethinking.</div>
+        <div class="chips"><span class="chip block">changes stage 5</span></div>
+      </div>
+    </div>
+
+    <div class="col c-prog">
+      <h2><span class="dot"></span>Found, not yet fixed</h2>
+      <div class="card">
+        <div class="t">0.2b &middot; Release builds fail on a fresh clone</div>
+        <div class="d"><strong>New.</strong> A helper library is set up to package itself from a folder
+          only a debug build creates, so on a clean checkout every release build fails. Nobody upstream
+          noticed because their machines already had that folder. Build Debug once and it goes away.</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip fork">separate repo</span></div>
+      </div>
+      <div class="card">
+        <div class="t">0.2a &middot; First build always fails</div>
+        <div class="d">LSLib writes its parser files too late for that same build to compile them.
+          Building twice works. Didn't resurface this time because the files already existed.</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip fork">separate repo</span></div>
+      </div>
+      <div class="card">
+        <div class="t">The other four text columns pay the same toll</div>
+        <div class="d">Index, Version, Author and Last Updated are ordinary text too &mdash; each costs
+          ~70&ndash;90&nbsp;&micro;s per row to redraw, for the same two reasons. Same fix, applied four
+          more times; the biggest remaining win for the thumb drag.</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip fork">stage 6</span></div>
+      </div>
+      <div class="card">
+        <div class="t">Something outside the app sometimes reads the whole list</div>
+        <div class="d">In 4 of ~30 test runs an accessibility tool on this PC walked every row mid-scroll
+          &mdash; once for 5 of 16 seconds. Not the name cost, but real when it happens.</div>
+        <div class="chips"><span class="chip fork">stage 6</span></div>
+      </div>
+      <div class="card">
+        <div class="t">The earlier selection fix is tangled with test code</div>
+        <div class="d"><code>309b81ef</code> was written on top of temporary logging, so it won't apply
+          to a clean copy on its own. Needs a tidy-up before it can go upstream. The two new fixes
+          apply cleanly.</div>
+        <div class="chips"><span class="chip block">before any PR</span></div>
+      </div>
+      <div class="card">
+        <div class="t">58 errors swallowed on every load</div>
+        <div class="d">Measuring mod names for the list columns throws 58 handled exceptions per
+          startup, triggered by divider entries and non-Latin titles. Harmless, not free.</div>
+        <div class="chips"><span class="chip fork">stage 6</span></div>
+      </div>
+    </div>
+
+    <div class="col c-next">
+      <h2><span class="dot"></span>Up next</h2>
+
+      <div class="card">
+        <div class="t">1 &middot; Fork identity</div>
+        <div class="d">Repoint the updater. Without this, a published fork build replaces itself
+          with upstream's release.</div>
+        <div class="chips"><span class="chip fork">fork-only</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">2 &middot; Zip export corruption</div>
+        <div class="d">The file is opened without truncating, so exporting over a bigger zip leaves
+          old bytes behind. Write errors are also silently swallowed.</div>
+        <div class="chips"><span class="chip up">upstreamable</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">3 &middot; Archive import losses</div>
+        <div class="d">The order file is read with one unchecked read, so big orders arrive
+          truncated and get dropped silently. A failure flag also leaks between mods.</div>
+        <div class="chips"><span class="chip up">upstreamable</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">4 &middot; Faster startup</div>
+        <div class="d">Now measured: 9.3 s of the ~15 s is loading mods. Caching parsed metadata
+          between launches is the obvious lever.</div>
+        <div class="chips"><span class="chip up">upstreamable</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">5 &middot; Faster filtering + fuzzy search</div>
+        <div class="d">Re-scoped twice. The delay is <em>not</em> the half-second wait &mdash; it is
+          walking all 1&nbsp;121 mods and toggling each one's visibility, which costs over a second
+          even when nothing matches. You also want search to be <strong>fuzzy</strong>; that only
+          becomes affordable once the per-keystroke cost is fixed, so speed comes first.</div>
+        <div class="chips"><span class="chip up">upstreamable</span><span class="chip fork">fuzzy = fork-only</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">6 &middot; The mod list</div>
+        <div class="d">Scrolling, overrides folded into the order, and categories/dividers &mdash; all
+          rewrite the same list, so they share a stage. Scrolling: the name cell is fixed (see
+          Testing); next are the other four text columns, then the row re-binding work (~8.5&nbsp;ms of
+          each thumb-drag frame).</div>
+        <div class="chips"><span class="chip up">part upstreamable</span><span class="chip fork">part fork-only</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">7 &middot; UI refresh</div>
+        <div class="d">Everything that isn't the list, once the list has settled.</div>
+        <div class="chips"><span class="chip fork">fork-only</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">8 &middot; Multi-order export</div>
+        <div class="d">Several orders into one zip with no duplicate mods. Cheap if stage 2 sets it
+          up properly.</div>
+        <div class="chips"><span class="chip fork">fork-only</span></div>
+      </div>
+
+      <div class="card">
+        <div class="t">9 &middot; Downloader, syncing, native mods</div>
+        <div class="d">Deliberately parked. Each needs its own spec session before any code.</div>
+        <div class="chips"><span class="chip fork">needs spec</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="test">
+    <h2>What to verify</h2>
+    <p class="sub">Everything below is already built and sitting in <code>bin\</code>. Nothing here
+       needs a rebuild. Delete the empty <code>perfscroll</code> file next to the exe if you ever see
+       the app scroll and close itself &mdash; that is the test driver (it is removed after each run).</p>
+    <ul>
+      <li><strong>Drag the scrollbar thumb on the Active list.</strong> Open
+          <code>bin\Debug\BG3ModManager.exe</code> and drag it top to bottom. It should feel clearly
+          better than before, but not perfect yet &mdash; the other text columns still cost (next step).</li>
+      <li><strong>Check the names look exactly as before.</strong> Same font, same sharpness, long names
+          cut off at the column edge, selected rows' names in the selected colour.</li>
+      <li><strong>Hover the empty part of a name cell.</strong> The mod's tooltip should still open there,
+          not only over the letters.</li>
+      <li><strong>Switch Light/Dark theme</strong> (Settings &rarr; Toggle Light/Dark Mode, or
+          <kbd>Ctrl</kbd>+<kbd>L</kbd>) with the list visible. The names must change colour immediately
+          along with everything else.</li>
+      <li><strong>If you use a screen reader,</strong> check it still reads mod names in the list.</li>
+      <li><strong>Say whether to do the other four columns next</strong> with the same fix.</li>
+      <li><strong>Confirm the search feels as slow as it measures.</strong> Type a single letter into
+          the search box and count. I measured up to ~3.8 s before it settles.</li>
+      <li><strong>Check the release zip.</strong> <code>BG3ModManager_Latest.zip</code> in the repo root
+          was produced by the proof run &mdash; open it and confirm it looks like a real release.</li>
+      <li><strong>Decide on the game path.</strong> I pointed the test build at
+          <code>D:\Games\GOG\Baldurs Gate 3</code>. Your real install of the manager is untouched, and
+          your <code>modsettings.lsx</code> is byte-for-byte unchanged &mdash; I verified.</li>
+      <li><strong>Say whether to push.</strong> Two commits sit on
+          <code>fix/publish-prebuild-quoting</code>, unpushed.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Full details: <a href="implementation-plan.html">implementation-plan.html</a> ·
+    Repo reference: <a href="CLAUDE.md">CLAUDE.md</a>
+  </footer>
+
+</div>
+</body>
+</html>

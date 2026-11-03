@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BG3MM Fork — Implementation Plan</title>
+<style>
+  :root{
+    --bg:#f7f7f9; --panel:#fff; --ink:#1a1a1f; --muted:#5d6068; --line:#dfe1e6;
+    --accent:#4e38c9; --accent-soft:#ede9fd;
+    --red:#c0392b; --red-soft:#fdeceb; --amber:#9a6700; --amber-soft:#fff6e0;
+    --green:#1a7f45; --green-soft:#e6f5ec; --code:#f2f2f6;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#131318; --panel:#1b1b22; --ink:#e9e9ee; --muted:#a0a3ad; --line:#2f2f3a;
+      --accent:#a897ff; --accent-soft:#241d47;
+      --red:#ff8a80; --red-soft:#3a1f1d; --amber:#ffc95c; --amber-soft:#3a2f14;
+      --green:#7ee0a5; --green-soft:#16301f; --code:#22222b;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 16px 96px}
+  header.hero{background:linear-gradient(135deg,var(--accent),#7d5fe0);color:#fff;
+    padding:48px 16px 40px;margin-bottom:32px}
+  header.hero .inner{max-width:1080px;margin:0 auto}
+  header.hero h1{margin:0 0 8px;font-size:2rem;letter-spacing:-.02em}
+  header.hero p{margin:0;opacity:.92;max-width:70ch}
+  .meta{margin-top:20px;display:flex;flex-wrap:wrap;gap:8px}
+  .meta span{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28);
+    border-radius:999px;padding:4px 12px;font-size:.8rem}
+  nav.toc{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px 22px;margin-bottom:36px}
+  nav.toc h2{margin:0 0 10px;font-size:.78rem;text-transform:uppercase;
+    letter-spacing:.09em;color:var(--muted)}
+  nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:32px}
+  nav.toc li{margin:3px 0;break-inside:avoid}
+  nav.toc a{color:var(--ink);text-decoration:none}
+  nav.toc a:hover{color:var(--accent);text-decoration:underline}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:26px 28px;margin-bottom:22px}
+  h2{margin:0 0 4px;font-size:1.3rem;letter-spacing:-.01em;scroll-margin-top:20px}
+  h2 .num{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
+  h3{margin:26px 0 8px;font-size:1.02rem}
+  h4{margin:18px 0 6px;font-size:.92rem;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.06em}
+  p,li{max-width:76ch}
+  code{background:var(--code);padding:1px 6px;border-radius:5px;
+    font:.87em ui-monospace,"Cascadia Code",Consolas,monospace}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:9px;
+    padding:14px 16px;overflow-x:auto;margin:12px 0}
+  pre code{background:none;padding:0;font-size:.84rem;line-height:1.6}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:.9rem}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--accent-soft);font-weight:600}
+  .callout{border-left:4px solid var(--accent);background:var(--accent-soft);
+    padding:12px 16px;border-radius:0 9px 9px 0;margin:16px 0}
+  .callout.bad{border-color:var(--red);background:var(--red-soft)}
+  .callout.warn{border-color:var(--amber);background:var(--amber-soft)}
+  .callout.good{border-color:var(--green);background:var(--green-soft)}
+  .callout p{margin:6px 0}
+  .callout p:first-child{margin-top:0}.callout p:last-child{margin-bottom:0}
+  .pill{display:inline-block;border-radius:999px;padding:2px 10px;
+    font-size:.72rem;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .pill.up{background:var(--green-soft);color:var(--green);border:1px solid var(--green)}
+  .pill.fork{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
+  .pill.blocked{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
+  .stage{border:1px solid var(--line);border-radius:11px;padding:18px 20px;margin:16px 0;
+    background:var(--bg)}
+  .stage h3{margin:0 0 4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .stage .branch{font:.8rem ui-monospace,Consolas,monospace;color:var(--muted)}
+  .bug{border:1px solid var(--line);border-left:4px solid var(--red);border-radius:0 9px 9px 0;
+    padding:12px 15px;margin:12px 0;background:var(--panel)}
+  .bug .id{font-weight:700;color:var(--red);font-size:.8rem;letter-spacing:.05em}
+  .bug .loc{font:.78rem ui-monospace,Consolas,monospace;color:var(--muted)}
+  figure{margin:20px 0;text-align:center}
+  figcaption{font-size:.82rem;color:var(--muted);margin-top:8px}
+  svg{max-width:100%;height:auto}
+  .conf{font-size:.74rem;font-weight:700;padding:1px 8px;border-radius:999px;
+    border:1px solid currentColor}
+  .conf.hi{color:var(--green)}.conf.med{color:var(--amber)}.conf.lo{color:var(--muted)}
+  footer{color:var(--muted);font-size:.85rem;text-align:center;padding:20px}
+  ul.tight li{margin:4px 0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="inner">
+    <h1>BG3 Mod Manager — Fork Implementation Plan</h1>
+    <p>Detailed reference for the SpasticPengu fork: ten stages, ordered so that
+       anything worth sending upstream is built before anything that can't be.</p>
+    <div class="meta">
+      <span>Base: <strong>upstream/master</strong> (WPF, .NET 8)</span>
+      <span>Fork commits: <strong>2</strong> (fix/publish-prebuild-quoting)</span>
+      <span>Current stage: <strong>0 — complete, in testing</strong></span>
+      <span>Drafted 2026-09-21 · updated 2026-09-23 (Stage 0 results)</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#goal">Goal and scope</a></li>
+    <li><a href="#decisions">Decisions taken</a></li>
+    <li><a href="#git">Git strategy</a></li>
+    <li><a href="#stage0">Stage 0 — Toolchain &amp; first build</a></li>
+    <li><a href="#stage1">Stage 1 — Fork identity &amp; safety</a></li>
+    <li><a href="#stage2">Stage 2 — Zip export corruption</a></li>
+    <li><a href="#stage3">Stage 3 — Archive import losses</a></li>
+    <li><a href="#stage4">Stage 4 — Perf A: startup load</a></li>
+    <li><a href="#stage5">Stage 5 — Perf B: filter &amp; search</a></li>
+    <li><a href="#stage6">Stage 6 — The list workstream</a></li>
+    <li><a href="#stage7">Stage 7 — UI/UX refresh</a></li>
+    <li><a href="#stage8">Stage 8 — Multi-order export</a></li>
+    <li><a href="#stage9">Stage 9 — Ambitious set</a></li>
+    <li><a href="#risks">Risks</a></li>
+    <li><a href="#verify">Verification</a></li>
+  </ol>
+</nav>
+
+<section id="goal">
+  <h2><span class="num">1</span>Goal and scope</h2>
+  <p>A fork of LaughingLeader's BG3 Mod Manager, primarily for the owner and friends,
+     but published publicly. Four workstreams, in the owner's words:</p>
+  <ul class="tight">
+    <li><strong>Bugfixes</strong> — zip export is inconsistent/corrupting; importing order and mods
+        from an archive loses mods and/or the order.</li>
+    <li><strong>Performance</strong> — slow initial load with many mods, slow scrolling, slow filtering.</li>
+    <li><strong>UI</strong> — dated appearance, UX improvements.</li>
+    <li><strong>Features</strong> — multi-order export, categories/dividers, overrides folded into the
+        load order; later, a downloader, order syncing with friends, and native-mod management.</li>
+  </ul>
+  <div class="callout">
+    <p><strong>All repo facts referenced here are in <code>CLAUDE.md</code> at the repo root.</strong>
+       This plan does not repeat them; it cites section numbers (§2.2, §4, …).</p>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2><span class="num">2</span>Decisions taken</h2>
+  <table>
+    <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+    <tr>
+      <td>Base branch</td>
+      <td><strong>upstream/master</strong> (WPF)</td>
+      <td>The circleainn/BG3ModManager-Redux fork proves a modern UI and every wanted feature is
+          achievable on this exact stack (WPF, .NET 8). <code>upstream/avalonia</code> is 944 commits
+          ahead but unfinished, unreleased, 6 months stale, and on <code>Avalonia 12.0.0-preview1</code>.</td>
+    </tr>
+    <tr>
+      <td>Platforms</td>
+      <td>Windows now, Linux kept open</td>
+      <td>Steam Deck support was rated "nice, not a driver". Stages note where a future Avalonia
+          port would invalidate work; toolkit-neutral choices preferred where free.</td>
+    </tr>
+    <tr>
+      <td>Upstream contribution</td>
+      <td>Bugfixes and perf only</td>
+      <td>Drives the whole ordering — see §3.</td>
+    </tr>
+    <tr>
+      <td>Categories implementation</td>
+      <td><strong>Not</strong> via WPF grouping</td>
+      <td>See the landmine in Stage 6. <code>CollectionViewSource</code> grouping would set
+          <code>IsGrouping=True</code>, firing an existing template trigger that disables
+          <code>CanContentScroll</code> and kills virtualization.</td>
+    </tr>
+    <tr>
+      <td>Reuse of Redux code</td>
+      <td>General ideas only</td>
+      <td>Redux is MIT and reuse with attribution would be permitted; the owner chose a stricter
+          stance. Honoured throughout.</td>
+    </tr>
+  </table>
+</section>
+
+<section id="git">
+  <h2><span class="num">3</span>Git strategy</h2>
+  <div class="callout">
+    <p><strong>The governing rule: anything you might upstream must never be built on top of
+       anything you won't.</strong></p>
+    <p>A zip fix sitting on top of a UI overhaul is no longer cherry-pickable. This is the entire
+       reason bugfixes and performance come before features.</p>
+  </div>
+
+  <h3>Branch shape</h3>
+  <pre><code>master                     ← tracks upstream/master, never committed to directly
+ ├── fix/*    ┐
+ ├── perf/*   ├─ cut from a clean master, self-contained, upstream-targetable
+ └── chore/*  ┘
+fork/main                  ← the fork's own line; merges master + fork-only work
+ ├── feat/*                ← fork-only features, may depend on each other
+ └── ui/*</code></pre>
+
+  <p>Merge to the parent with <code>--no-ff</code> (owner's standing preference), one branch per
+     issue. Upstreamable branches are cut from <code>master</code>, <em>not</em> from
+     <code>fork/main</code>, so a PR to LaughingLeader contains only the fix.</p>
+
+  <h3>Two traps, both already verified</h3>
+  <div class="callout bad">
+    <p><strong>Never run <code>git config merge.ours.driver true</code>.</strong>
+       <code>.gitattributes</code> marks 21 files <code>merge=ours</code>, including
+       <code>IgnoredMods.json</code> — the file upstream patches after every BG3 update. With no
+       driver configured the attribute is inert and those files conflict normally, which is what
+       you want. Define the driver and upstream's changes are discarded silently, with no conflict.
+       See CLAUDE.md §8.2.</p>
+  </div>
+  <div class="callout warn">
+    <p><strong>Merge, don't rebase, when syncing upstream.</strong> Rebasing rewrites commits you
+       have already pushed to <code>origin</code>. See CLAUDE.md §8.3.</p>
+  </div>
+</section>
+
+<section id="stage0">
+  <h2><span class="num">4</span>Stage 0 &mdash; Toolchain &amp; first build</h2>
+
+  <div class="callout good">
+    <p><strong>Status 2026-09-23 &mdash; complete, ready to verify.</strong>
+       The toolchain is installed and proven. <code>Publish</code> builds twice in a row from a
+       clean <code>bin/</code>. The app was built in Debug, launched against the real 1&nbsp;097-pak
+       mod folder, and the Stage&nbsp;0.3 baseline is recorded below.</p>
+    <p><strong>Read 0.2 before trusting anything previously written about the pre-build event.</strong>
+       That bug has now been mis-diagnosed twice &mdash; once in the original survey, once in the
+       first correction. The measured mechanism is in 0.2 and it is not what either said.</p>
+    <p>Two blockers were found that no earlier document mentions: <strong>0.2b</strong>, which stops a
+       clean checkout from producing a release at all, and the <strong>filter-latency finding</strong>
+       in 0.3, which changes the premise of Stage&nbsp;5.</p>
+  </div>
+
+  <div class="stage">
+    <h3>0.1 Install the toolchain <span class="pill" style="background:var(--green-soft);color:var(--green);border:1px solid var(--green)">DONE</span></h3>
+    <table>
+      <tr><th>Component</th><th>State</th><th>Evidence</th></tr>
+      <tr><td><strong>VS Build Tools 2022</strong> + Desktop development with C++</td><td>installed</td>
+          <td>17.14.41, MSVC v143 <code>14.44.35207</code>.</td></tr>
+      <tr><td><strong>C++/CLI support</strong> (<code>/clr:netcore</code>)</td><td>installed &amp; proven</td>
+          <td><code>Microsoft.VisualStudio.Component.VC.CLI.Support</code> now registers, and
+              <code>LSLibNative.dll</code> builds.</td></tr>
+      <tr><td><strong>Windows SDK</strong></td><td>installed</td>
+          <td>Windows 11 SDK <code>10.0.26100.0</code>. The earlier claim that
+              <code>Windows Kits\10\Include</code> does not exist was wrong.</td></tr>
+      <tr><td><strong>.NET 8 SDK / Desktop Runtime</strong></td><td>installed</td>
+          <td><code>8.0.425</code>; <code>Microsoft.WindowsDesktop.App 8.0.31</code>.</td></tr>
+      <tr><td><strong>.NET SDK component for Build Tools</strong><br><code>Microsoft.NetCore.Component.SDK</code></td>
+          <td>installed &amp; proven</td>
+          <td>This was the one real gap. Verified functionally, not just by catalog: evaluating
+              <code>Toolbox.csproj</code> with <code>-getProperty</code> resolves
+              <code>Microsoft.NET.Sdk</code> under <strong>both</strong> amd64 and x86 MSBuild.
+              The amd64 <code>SdkResolvers</code> folder is still empty and
+              <code>updateDate</code> never moved &mdash; both are harmless.</td></tr>
+      <tr><td><strong>GPLex 1.2.2 + GPPG 1.5.2</strong><br><code>External/lslib/External/gppg/binaries/</code></td>
+          <td>installed correctly</td>
+          <td>Byte-identical to the official distributions, both execute, both ran inside a real
+              build. Location matches <code>LSLib.csproj:67-68</code>, which is authoritative over
+              lslib's README.</td></tr>
+      <tr><td><strong><code>gh</code> CLI</strong></td><td>authenticated</td>
+          <td><code>SpasticPengu</code>; scopes <code>gist, read:org, repo, workflow</code>.</td></tr>
+    </table>
+    <p>No environment-variable workarounds are needed or in use. <code>MSBuildSDKsPath</code>,
+       <code>MSBuildEnableWorkloadResolver</code> and <code>DOTNET_HOST_PATH</code> are all unset,
+       and builds are clean without them.</p>
+  </div>
+
+  <div class="stage">
+    <h3>0.2 Fix the pre-build event <span class="pill up">UPSTREAMABLE</span>
+        <span class="branch">fix/publish-prebuild-quoting &middot; 5f8a80a9</span></h3>
+
+    <div class="callout bad">
+      <p><strong>Both earlier diagnoses were wrong.</strong> The original survey said the build fails
+         with <code>MSB3073</code> (exit 2 / exit 3). The first correction said the build succeeds but
+         <code>_Lib</code> is silently left stale because the unquoted path splits on the space in
+         <code>&hellip;\Git Repositories\&hellip;</code>. <strong>Neither happens.</strong> The
+         pre-build event works correctly today, on this machine, space and all.</p>
+    </div>
+
+    <p>The mechanism, read out of a real build log rather than a harness:</p>
+    <pre><code>&lt;PreBuildEvent&gt;rd /s /q $(TargetDir)_Lib&lt;/PreBuildEvent&gt;      &lt;!-- GUI.csproj:82 --&gt;
+
+MSBuild log:   8&gt;PreBuildEvent:
+                    rd /s /q _Lib</code></pre>
+
+    <p><strong>Two mistakes that cancel out:</strong></p>
+    <ol>
+      <li><code>$(TargetDir)</code> expands to <strong>nothing</strong>. The property group sits above
+          the implicit <code>Microsoft.NET.Sdk</code> targets import, and <code>TargetDir</code> is not
+          defined until that import is evaluated. So no path is ever interpolated &mdash; which is why
+          the space in the repo path is irrelevant.</li>
+      <li>The command is therefore the relative <code>rd /s /q _Lib</code>, and
+          <code>Microsoft.Common.CurrentVersion.targets:1426</code> runs it as
+          <code>&lt;Exec WorkingDirectory="$(OutDir)" &hellip;/&gt;</code>. <code>_Lib</code> resolves
+          against <code>bin\Publish\</code> &mdash; exactly the right folder.</li>
+    </ol>
+
+    <p>Confirmed by planting marker files in both candidate locations and building:</p>
+    <table>
+      <tr><th>Marker</th><th>After a Publish build with the original command</th></tr>
+      <tr><td><code>bin\Publish\_Lib\&hellip;</code></td><td><strong>deleted</strong> &mdash; the command works</td></tr>
+      <tr><td><code>src\GUI\_Lib\&hellip;</code></td><td>untouched &mdash; the working directory is not the project dir</td></tr>
+    </table>
+
+    <p>The only genuine defect is cosmetic: on the first <code>Publish</code> after a clean,
+       <code>_Lib</code> does not exist and <code>rd</code> writes
+       "The system cannot find the file specified." to stderr. <code>cmd</code> still exits 0, so the
+       build is unaffected.</p>
+
+    <div class="callout warn">
+      <p><strong>Why change it at all, then?</strong> Because it is correct only by accident. Anything
+         that makes <code>TargetDir</code> resolve &mdash; moving the property group below the SDK
+         import, or a future SDK defining it earlier &mdash; converts it into an
+         <em>unquoted absolute path</em>, and the space-splitting bug the original survey predicted
+         becomes real. The fix removes the accident and the stderr noise together.</p>
+    </div>
+
+    <p><strong>The committed fix</strong> uses <code>$(OutputPath)</code>, which this project sets at
+       <code>GUI.csproj:25</code> &mdash; above the property group, so it <em>is</em> defined at that
+       point in evaluation:</p>
+    <pre><code>&lt;PreBuildEvent&gt;if exist "$(OutputPath)_Lib" rd /s /q "$(OutputPath)_Lib"&lt;/PreBuildEvent&gt;</code></pre>
+    <p>which now evaluates to a real, quoted, absolute path:</p>
+    <pre><code>if exist "C:\Users\&hellip;\Git Repositories\BG3ModManager\\bin\Publish\_Lib" rd /s /q "&hellip;"</code></pre>
+
+    <p><strong>Proven end-to-end:</strong></p>
+    <table>
+      <tr><th>Check</th><th>Result</th></tr>
+      <tr><td><code>Publish</code> from a clean <code>bin/</code>, run 1</td><td>exit 0, 0 errors</td></tr>
+      <tr><td>&hellip; spurious stderr from <code>rd</code></td><td>0 lines (was 2)</td></tr>
+      <tr><td><code>Publish</code> run 2, immediately after</td><td>exit 0, 0 errors</td></tr>
+      <tr><td>File planted in <code>_Lib</code> between the runs</td><td><strong>deleted</strong> by run 2</td></tr>
+      <tr><td><code>_Lib</code> contents, run 1 vs run 2</td><td>identical, 47 files</td></tr>
+      <tr><td><code>BG3ModManager_Latest.zip</code></td><td>contains the exe, not the planted file</td></tr>
+    </table>
+    <p>A more idiomatic fix would drop the shell entirely and use
+       <code>&lt;RemoveDir Directories="$(OutputPath)_Lib" /&gt;</code> in a target, which resolves at
+       execution time and cannot be broken by evaluation order. Kept as a one-liner here to stay
+       minimal for an upstream PR.</p>
+  </div>
+
+  <div class="stage">
+    <h3>0.2a LSLib parser bootstrap <span class="pill up">UPSTREAMABLE</span>
+        <span class="branch">fix/lslib-generated-parser-glob (not cut)</span></h3>
+    <p>On a clean checkout the first build fails with <code>CS0534</code> / <code>CS0246</code>:
+       <code>LSLib.csproj</code> generates <code>Goal.lex.cs</code>, <code>Goal.yy.cs</code>,
+       <code>StoryHeader.lex.cs</code> and <code>StoryHeader.yy.cs</code> in a build target, but the
+       default <code>**/*.cs</code> glob is expanded during project <strong>evaluation</strong>, before
+       any target runs. Building twice works; the <code>Exec</code>s are guarded by
+       <code>Condition="!Exists(&hellip;)"</code>, so nothing is regenerated.</p>
+    <p><strong>Not re-triggered in this run</strong> &mdash; the generated files already
+       existed from earlier attempts, so every build here was effectively a "second" build. The trap
+       stands as previously observed, but still wants confirmation against a genuinely fresh clone
+       before the branch is cut.</p>
+    <p><strong>Candidate fix:</strong> add the four generated paths as explicit
+       <code>&lt;Compile Include&gt;</code> items, or have the generating target add them to
+       <code>@(Compile)</code>. It lives in the <code>lslib</code> submodule (LaughingLeader's fork),
+       so it is a separate PR to a separate repo.</p>
+  </div>
+
+  <div class="stage">
+    <h3>0.2b CrossSpeak blocks every non-Debug build <span class="pill up">UPSTREAMABLE</span>
+        <span class="branch">not yet cut &middot; CrossSpeak submodule</span></h3>
+    <div class="callout bad">
+      <p><strong>New, and the one that actually stopped the first build.</strong> On a clean checkout,
+         <code>Publish</code>, <code>PublishTest</code>, <code>Release</code> and
+         <code>Editor Debug</code> all fail. Only <code>Debug</code> works.</p>
+    </div>
+    <pre><code>NuGet.Build.Tasks.Pack.targets(221,5): error : Could not find a part of the path
+  '&hellip;\External\CrossSpeak\CrossSpeak\bin\Debug\netstandard2.0'.</code></pre>
+    <p><code>CrossSpeak.csproj</code> sets <code>GeneratePackageOnBuild=True</code> and points at a
+       hand-written <code>CrossSpeak.nuspec</code> whose file list hardcodes the <strong>Debug</strong>
+       output &mdash; with the Release line sitting right below it, commented out:</p>
+    <pre><code>&lt;file src="bin\Debug\netstandard2.0\CrossSpeak.dll" target="lib\netstandard2.0" /&gt;
+&lt;!--&lt;file src="bin\Release\netstandard2.0\CrossSpeak.dll" &hellip; /&gt;--&gt;</code></pre>
+    <p>The solution maps <code>Publish|x64</code> &rarr; <code>Release|Any CPU</code> for CrossSpeak,
+       so the build writes <code>bin\Release\&hellip;</code> and pack then looks in
+       <code>bin\Debug\&hellip;</code>, which on a fresh clone does not exist.</p>
+    <p><strong>Why nobody upstream hit it:</strong> on a machine that has built <code>Debug</code> even
+       once, <code>bin\Debug\netstandard2.0\</code> exists and pack silently succeeds &mdash; picking up
+       a stale DLL. Confirmed here: the Publish build failed on a clean tree, a Debug build created that
+       folder, and every Publish afterwards succeeded. Same family as 0.2a &mdash; works on the
+       maintainer's machine, fails on a clean checkout or in CI.</p>
+    <p><strong>Workaround in use:</strong> build <code>Debug</code> once before any
+       <code>Publish</code>. <strong>Candidate fix:</strong> drop
+       <code>GeneratePackageOnBuild</code> (nothing in this solution consumes the package &mdash; Core
+       references the project directly), or make the nuspec configuration-agnostic via
+       <code>$configuration$</code> and <code>NuspecProperties</code>. Lives in the CrossSpeak
+       submodule, so it is a third separate repo.</p>
+  </div>
+
+  <div class="stage">
+    <h3>0.3 Baseline the app <span class="pill" style="background:var(--green-soft);color:var(--green);border:1px solid var(--green)">DONE</span></h3>
+    <p>Debug build, logging enabled via the extension-less <code>debug</code> file next to the exe,
+       launched against the real mod folder. <strong>These are Debug-build numbers</strong> &mdash;
+       unoptimized IL, so treat them as the control for relative improvement, not as release
+       performance.</p>
+
+    <table>
+      <tr><th>Workload</th><th>Value</th></tr>
+      <tr><td>Paks in <code>%LOCALAPPDATA%\&hellip;\Mods</code></td><td>1&nbsp;097 (27&nbsp;GB)</td></tr>
+      <tr><td>Paks in the game <code>Data</code> folder</td><td>48 (GOG install)</td></tr>
+      <tr><td><strong>Mods loaded</strong></td><td><strong>1&nbsp;121</strong></td></tr>
+      <tr><td>Profiles</td><td>2 (active: <code>Public</code>)</td></tr>
+      <tr><td>Entries in the active profile order</td><td>935</td></tr>
+      <tr><td><code>modsettings.lsx</code> size</td><td>548&nbsp;KB</td></tr>
+    </table>
+
+    <p><strong>Cold start</strong> (wall clock from process start, log markers timestamped by polling):</p>
+    <table>
+      <tr><th>Milestone</th><th>t</th><th>&Delta;</th></tr>
+      <tr><td>First window (splash)</td><td>0.50 s</td><td>&mdash;</td></tr>
+      <tr><td>Log file created</td><td>1.09 s</td><td>0.59 s</td></tr>
+      <tr><td><code>RefreshAsync</code> starts</td><td>3.61 s</td><td>2.52 s &mdash; init, settings, resources</td></tr>
+      <tr><td>Mods finished loading</td><td>12.88 s</td><td><strong>9.27 s &mdash; the dominant cost</strong></td></tr>
+      <tr><td>Profiles loaded</td><td>13.35 s</td><td>0.47 s</td></tr>
+      <tr><td>Lists built, refresh done</td><td>14.61 s</td><td>1.26 s</td></tr>
+      <tr><td>UI responsive</td><td><strong>~15.2 s</strong></td><td>0.63 s</td></tr>
+    </table>
+    <p>At that point: <strong>478&nbsp;MB</strong> private / 559&nbsp;MB working set, 24.2&nbsp;s CPU,
+       59 threads, 1&nbsp;055 handles. After interaction, 480&nbsp;MB / 594&nbsp;MB.</p>
+
+    <div class="callout warn">
+      <p><strong>Filter latency &mdash; this changes Stage 5's premise.</strong> The plan assumed the
+         500&nbsp;ms throttle "alone may be what feels slow". It is not. Measured by driving the real
+         search boxes through UI Automation and sampling CPU until the process went idle:</p>
+      <table>
+        <tr><th>Action</th><th>Settled at</th><th>Work after the 500 ms throttle</th></tr>
+        <tr><td>Inactive list, broad match (<code>a</code>)</td><td>3.77 s</td><td><strong>3.27 s</strong></td></tr>
+        <tr><td>Inactive list, cleared</td><td>1.87 s</td><td>1.37 s</td></tr>
+        <tr><td>Inactive list, no match (<code>zzzzzz</code>)</td><td>1.74 s</td><td>1.24 s</td></tr>
+        <tr><td>Active list, broad match (<code>e</code>)</td><td>1.89 s</td><td>1.39 s</td></tr>
+        <tr><td>Active list, cleared</td><td>1.84 s</td><td>1.34 s</td></tr>
+      </table>
+      <p>Even a filter that matches <em>nothing</em> costs ~1.2&nbsp;s of work. Removing or shortening
+         the throttle would therefore win at most a fifth of the delay. The cost is in
+         <code>OnFilterTextChanged</code> walking every mod and setting
+         <code>Visibility</code> per item &mdash; which also means the virtualizing panel still has to
+         realize and collapse containers rather than simply not having the items. Stage 5 should target
+         that, not the throttle.</p>
+    </div>
+
+    <div class="callout warn">
+      <p><strong>Scroll &mdash; reported by Konstantinos, 2026-09-23:</strong>
+         <em>"not stuttery but not as smooth as I'd like"</em>, on the <strong>inactive</strong> list.
+         The lists expose no <code>ScrollPattern</code>, so this could not be automated; it is his
+         judgement, and it is the Stage&nbsp;6 target.</p>
+      <p><strong>Two things make that verdict sharper than it looks.</strong> First, the inactive list
+         is the <em>small</em> one &mdash; roughly 186 rows against the active list's 935. The list
+         most likely to feel bad has not been tried yet. Second, "not stuttery" rules out dropped
+         frames, and virtualization is confirmed on
+         (<code>IsVirtualizing="True"</code>, <code>VirtualizationMode="Recycling"</code>,
+         <code>HorizontalModLayout.xaml:119,223</code>) &mdash; so this is not a throughput problem.</p>
+      <p><strong>Likely cause, and it is one line per list.</strong>
+         <code>VirtualizingPanel.ScrollUnit</code> is <strong>not set anywhere in the codebase</strong>
+         (grepped across all <code>.xaml</code> and <code>.cs</code>), so WPF's default
+         <code>ScrollUnit="Item"</code> applies: the list scrolls a whole row at a time rather than by
+         pixels. Smooth frames, but the content steps instead of gliding &mdash; which is exactly
+         "not stuttery, not smooth".</p>
+    </div>
+
+    <div class="callout warn">
+      <p><strong>58 handled exceptions during a single load.</strong>
+         <code>ElementHelper.MeasureText</code> throws
+         <code>KeyNotFoundException</code> out of WPF's font cache 58 times while the mod list column
+         autosizer measures mod names (<code>HorizontalModLayout.xaml.cs:846</code> and
+         <code>:910</code>). They are caught and logged, so nothing breaks, but throwing 58 exceptions
+         on the UI path is not free and the names that trigger it &mdash; divider entries made of
+         <code>=</code> characters, and non-Latin titles &mdash; are ordinary in a 900-mod order.
+         Candidate work for Stage 6.</p>
+    </div>
+  </div>
+</section>
+
+<section id="stage1">
+  <h2><span class="num">5</span>Stage 1 — Fork identity &amp; safety</h2>
+  <div class="stage">
+    <h3>Repoint the updater <span class="pill fork">FORK-ONLY</span>
+        <span class="branch">chore/fork-identity</span></h3>
+    <div class="callout bad">
+      <p>Because you intend to publish, this is <strong>required, not optional</strong>. Unchanged,
+         a fork build reads upstream's <code>Update.xml</code>, offers upstream's release to your
+         users, and overwrites your install with LaughingLeader's.</p>
+    </div>
+    <ul class="tight">
+      <li><code>src/Core/DivinityApp.cs:19-30</code> — <code>URL_UPDATE</code> and
+          <code>URL_CHANGELOG_RAW</code> are the live ones.
+          <code>GITHUB_USER</code>/<code>GITHUB_REPO</code>/<code>GITHUB_RELEASE_ASSET</code> are
+          declared but never referenced — changing them alone does nothing.</li>
+      <li>Root <code>Update.xml</code> — version and download URL.</li>
+      <li><code>README.md</code> — the "only official source" wording is upstream's and becomes false
+          in a fork. Add a fork notice; keep the MIT notice and © LaughingLeader; keep credit to
+          Norbyte for LSLib.</li>
+      <li>Decide on the ko-fi links (upstream's donation buttons).</li>
+    </ul>
+    <p><strong>Verify:</strong> with a deliberately low <code>AssemblyVersion</code>, the updater
+       offers <em>your</em> release, not upstream's.</p>
+  </div>
+</section>
+
+<section id="stage2">
+  <h2><span class="num">6</span>Stage 2 — Zip export corruption</h2>
+  <p><span class="pill up">UPSTREAMABLE</span>
+     <span class="branch">fix/zip-export-corruption</span> — all in
+     <code>src/GUI/ViewModels/MainWindowViewModel.cs</code>, i.e. <code>src/GUI</code>, so a future
+     Avalonia port would carry the logic but not the file.</p>
+
+  <figure>
+    <svg viewBox="0 0 900 250" role="img" aria-label="Export pipeline with four failure points">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+          <path d="M0,0 L9,4.5 L0,9 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g fill="none" stroke="currentColor" stroke-width="1.6" color="var(--muted)">
+        <line x1="150" y1="60" x2="196" y2="60" marker-end="url(#ar)"/>
+        <line x1="330" y1="60" x2="376" y2="60" marker-end="url(#ar)"/>
+        <line x1="510" y1="60" x2="556" y2="60" marker-end="url(#ar)"/>
+        <line x1="690" y1="60" x2="736" y2="60" marker-end="url(#ar)"/>
+      </g>
+      <g font-size="12" font-family="sans-serif">
+        <g>
+          <rect x="20" y="36" width="130" height="48" rx="7" fill="var(--accent-soft)"
+                stroke="var(--accent)"/>
+          <text x="85" y="58" text-anchor="middle" fill="var(--ink)">Collect mods</text>
+          <text x="85" y="73" text-anchor="middle" fill="var(--muted)">order + overrides</text>
+        </g>
+        <g>
+          <rect x="200" y="36" width="130" height="48" rx="7" fill="var(--red-soft)"
+                stroke="var(--red)" stroke-width="2"/>
+          <text x="265" y="58" text-anchor="middle" fill="var(--ink)">File.OpenWrite</text>
+          <text x="265" y="73" text-anchor="middle" fill="var(--red)">E1 no truncate</text>
+        </g>
+        <g>
+          <rect x="380" y="36" width="130" height="48" rx="7" fill="var(--accent-soft)"
+                stroke="var(--accent)"/>
+          <text x="445" y="58" text-anchor="middle" fill="var(--ink)">write order.json</text>
+        </g>
+        <g>
+          <rect x="560" y="36" width="130" height="48" rx="7" fill="var(--red-soft)"
+                stroke="var(--red)" stroke-width="2"/>
+          <text x="625" y="58" text-anchor="middle" fill="var(--ink)">WriteZipAsync</text>
+          <text x="625" y="73" text-anchor="middle" fill="var(--red)">E2 swallows all</text>
+        </g>
+        <g>
+          <rect x="740" y="36" width="140" height="48" rx="7" fill="var(--green-soft)"
+                stroke="var(--green)"/>
+          <text x="810" y="58" text-anchor="middle" fill="var(--ink)">"Exported!"</text>
+          <text x="810" y="73" text-anchor="middle" fill="var(--muted)">always success</text>
+        </g>
+        <g>
+          <rect x="200" y="140" width="680" height="72" rx="8" fill="var(--red-soft)"
+                stroke="var(--red)" stroke-dasharray="5 3"/>
+          <text x="216" y="163" fill="var(--ink)" font-weight="600">Why the zip is "sometimes" corrupt</text>
+          <text x="216" y="182" fill="var(--muted)">E1: overwriting a LARGER existing zip leaves the old tail behind → invalid archive.</text>
+          <text x="216" y="199" fill="var(--muted)">E3: cancelling mid-write returns from inside the using — the partial file is left on disk.</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>Export path. Red boxes are defects located in the code, not hypotheses.</figcaption>
+  </figure>
+
+  <div class="bug">
+    <div class="id">E1 — corrupt archive on overwrite <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3579</div>
+    <pre><code>using (var stream = File.OpenWrite(outputPath))</code></pre>
+    <p><code>File.OpenWrite</code> uses <code>FileMode.OpenOrCreate</code> — it <strong>does not
+       truncate</strong>. Export over an existing zip that is larger than the new one and the old
+       bytes remain past the end of the new archive. That is a corrupt zip, and it explains the
+       "sometimes" perfectly: it depends entirely on the relative sizes.</p>
+    <p><strong>Fix:</strong> <code>File.Create(outputPath)</code> (or
+       <code>FileMode.Create</code>). Write to a <code>.tmp</code> beside the target and
+       <code>File.Move(..., overwrite:true)</code> on success, so a failed export never replaces a
+       good archive.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">E2 — mods silently missing from the zip <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3660-3670, inside WriteZipAsync</div>
+    <pre><code>catch (Exception)
+{
+    // ignored because an exception on a cancellation request
+    // cannot be avoided if the stream gets disposed afterwards
+}</code></pre>
+    <p>Every failure is swallowed — a locked <code>.pak</code>, a missing file, an I/O error. The
+       mod is omitted and the export still reports success. <strong>This is very likely the real
+       cause of the "import didn't get all my mods" complaint too</strong>: the mods were never in
+       the archive.</p>
+    <p><strong>Fix:</strong> catch <code>OperationCanceledException</code> only; collect real
+       failures into a result object and surface them via <code>ShowAlert</code> (CLAUDE.md §5 —
+       note the log is off by default, so log-only reporting is invisible).</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">E3 — cancellation leaves a partial zip <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3593</div>
+    <p><code>if (t.IsCancellationRequested) return false;</code> returns from inside the
+       <code>using</code>. The stream disposes and a truncated zip is left on disk, never deleted.
+       It also skips <code>Directory.Delete(tempDir)</code>, so temp folders accumulate.</p>
+    <p><strong>Fix:</strong> the write-to-temp-then-move approach in E1 solves this too.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">E4 — busy-wait during export <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3675-3685</div>
+    <pre><code>var childTask = Task.Factory.StartNew(..., TaskCreationOptions.AttachedToParent);
+var awaiter = childTask.GetAwaiter();
+while (!awaiter.IsCompleted)
+{
+    await Task.Delay(0, token);
+}</code></pre>
+    <p>Two faults. <code>Task.Delay(0)</code> completes immediately, so this is a spin loop hammering
+       the thread pool for the entire duration of the write. And
+       <code>AttachedToParent</code> is a no-op here because <code>Task.Run</code> creates its task
+       with <code>DenyChildAttach</code>.</p>
+    <p><strong>Fix:</strong> <code>await Task.Run(() =&gt; writer.Write(entryName, source), token)</code>.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">E5 — temp cleanup can throw <span class="conf med">MEDIUM</span></div>
+    <div class="loc">MainWindowViewModel.cs:3650</div>
+    <p><code>Directory.Delete(tempDir)</code> is non-recursive and sits outside the
+       <code>try</code>. Any leftover file (e.g. <code>CreatePackageAsync</code> returned false, so
+       the temp <code>.pak</code> was never deleted) makes it throw, unhandled.</p>
+    <p><strong>Fix:</strong> <code>Directory.Delete(tempDir, true)</code> inside a
+       <code>finally</code>.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">E6 — division by zero <span class="conf hi">HIGH</span> (cosmetic)</div>
+    <div class="loc">MainWindowViewModel.cs:3574</div>
+    <p><code>1d / modPaks.Count</code> is <code>Infinity</code> when the order is empty. Guard it.</p>
+  </div>
+
+  <h4>Design note for Stage 8</h4>
+  <p>The export writes one order JSON and then streams each mod, keyed by
+     <code>Path.GetFileName(mod.FilePath)</code>. Multi-order export needs a set of mods unioned
+     across orders and several order JSONs. Restructuring around
+     <code>(IEnumerable&lt;DivinityLoadOrder&gt;, HashSet&lt;mod&gt;)</code> is a small change
+     <em>if done while fixing these bugs</em>, and an awkward one later. Do the refactor here; ship
+     the feature in Stage 8.</p>
+</section>
+
+<section id="stage3">
+  <h2><span class="num">7</span>Stage 3 — Archive import losses</h2>
+  <p><span class="pill up">UPSTREAMABLE</span>
+     <span class="branch">fix/archive-import</span> — <code>ImportArchiveAsync</code>,
+     <code>MainWindowViewModel.cs:3390-3524</code>.</p>
+
+  <div class="bug">
+    <div class="id">I1 — the load order is silently lost <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3457-3462</div>
+    <pre><code>int length = (int)file.Size;
+var result = new byte[length];
+await entryStream.ReadAsync(result, 0, length);   // return value discarded
+string text = Encoding.UTF8.GetString(result);</code></pre>
+    <p>A single <code>ReadAsync</code> is <strong>not guaranteed to fill the buffer</strong>, and on
+       a decompression stream a short read is normal. The count is discarded, so <code>result</code>
+       keeps trailing zero bytes → truncated JSON → <code>SafeDeserialize</code> returns
+       <code>null</code> (it swallows errors by design,
+       <code>DivinityJsonUtils.cs:29-37</code>) → <code>order == null</code> → the order is dropped
+       with <strong>no error shown and nothing logged</strong>.</p>
+    <p>That is a complete causal chain for "sometimes it doesn't import the load order", and it is
+       size-dependent, which is why it looks intermittent.</p>
+    <p><strong>Fix:</strong> <code>await entryStream.ReadExactlyAsync(result, cts)</code>, or copy
+       into a <code>MemoryStream</code> and decode that. Then make the deserialize failure loud.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">I2 — <code>success</code> leaks across entries <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="loc">MainWindowViewModel.cs:3395 (declaration), 3428-3444 (use)</div>
+    <p><code>bool success</code> is declared once for the whole archive and set <code>true</code> on
+       the first successful extraction, but <strong>never reset per entry</strong>. If pak #1
+       extracts and pak #2 fails, <code>success</code> is still <code>true</code>, so the code
+       proceeds to <code>LoadModDataFromPakAsync</code> on a truncated file. That returns null, and
+       the mod vanishes without a visible error.</p>
+    <p><strong>Fix:</strong> a per-entry local. Also use the loop variable rather than a shared flag
+       for the "did anything at all succeed" decision further down.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">I3 — whole archive read into a throwaway buffer <span class="conf hi">HIGH</span></div>
+    <div class="loc">MainWindowViewModel.cs:3411</div>
+    <pre><code>await fileStream.ReadAsync(new byte[fileStream.Length], 0, (int)fileStream.Length);
+fileStream.Position = 0;</code></pre>
+    <p>Allocates a byte array the size of the entire archive, reads into it, discards it, and
+       rewinds. For a friend-sized modlist zip that is a multi-hundred-MB spike for no benefit, and
+       <code>(int)</code> overflows above 2 GB. <strong>Fix: delete these two lines.</strong></p>
+  </div>
+
+  <div class="bug">
+    <div class="id">I4 — .7z and .rar are accepted but handled badly <span class="conf med">MEDIUM</span></div>
+    <div class="loc">MainWindowViewModel.cs:3048 (filter), 3066 (guard commented out)</div>
+    <p>The dialog offers <code>*.7z, *.rar, *.zip</code>, and the guard that used to reject non-zip
+       is commented out. <code>ArchiveFactory.Open</code> + <code>Entries</code> +
+       <code>OpenEntryStream</code> on a <em>solid</em> 7z/rar re-decompresses from the start for
+       each entry — pathologically slow, and a plausible "it just hangs / half the mods missing"
+       report.</p>
+    <p><strong>Fix:</strong> keep accepting them, but route non-zip through
+       <code>ReaderFactory</code> forward-only extraction, or extract once to a temp dir. Decide by
+       measurement on a real 7z.</p>
+  </div>
+
+  <div class="bug">
+    <div class="id">I5 — same-named paks collide <span class="conf med">MEDIUM</span></div>
+    <div class="loc">MainWindowViewModel.cs:3422-3424</div>
+    <p>Every <code>.pak</code> is flattened to <code>PathwayData.AppDataModsPath</code> by filename,
+       so two entries in different archive folders with the same name silently overwrite.
+       <code>File.Create</code> truncates, so the second wins.</p>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>Are the export and import bugs the same defect?</strong> Partly, and it matters for
+       testing. <strong>E2</strong> produces archives that are genuinely missing mods — importing
+       one of those looks like an import bug but isn't. <strong>I1/I2</strong> are independent
+       import defects that would lose data even from a perfect archive. So: fix export first, then
+       re-test import <em>with a freshly exported archive</em> and with a known-good hand-made one,
+       or you will not be able to tell which fix did what.</p>
+  </div>
+</section>
+
+<section id="stage4">
+  <h2><span class="num">8</span>Stage 4 — Perf A: startup load</h2>
+  <p><span class="pill up">UPSTREAMABLE</span> <span class="branch">perf/startup-load</span> —
+     mostly <code>src/Core</code>, so this survives a future Avalonia port.</p>
+  <div class="callout">
+    <p><strong>Measure first. This stage starts with instrumentation, not optimisation.</strong>
+       Your own Facet spec records that the obvious first fix was wrong and only measurement showed
+       it. Same rule here.</p>
+  </div>
+  <h3>4.1 Instrument</h3>
+  <p>Add stopwatch timings around each of <code>RefreshAsync</code>'s ten steps and around
+     <code>LoadBuiltinModsAsync</code> / <code>LoadModPackageDataAsync</code>, logged via
+     <code>DivinityApp.Log</code>. Capture with a real mod set and record N.</p>
+  <h3>4.2 Candidates, to confirm or kill</h3>
+  <table>
+    <tr><th>Candidate</th><th>Note</th></tr>
+    <tr><td>Per-pak full entry enumeration + regex</td>
+        <td>Override detection matches <code>^(Mods|Public)/(.+?)/.+$</code> against
+            <strong>every file entry in every pak</strong>. Likely the dominant cost at high mod counts.</td></tr>
+    <tr><td>MD5 hashing</td><td>If a hash is computed over whole pak files, that alone can dominate.</td></tr>
+    <tr><td>No metadata cache</td>
+        <td>There is no on-disk cache of parsed mod metadata. A cache keyed by
+            <em>path + mtime + size</em> would skip nearly all work on subsequent launches — probably
+            the single biggest win, and low risk because a stale entry is detectable.</td></tr>
+    <tr><td>Double enumeration of loose mods</td>
+        <td>Editor mods are discovered twice (LSLib VFS and <code>LoadEditorProjectsAsync</code>).</td></tr>
+  </table>
+  <div class="callout bad">
+    <p><strong>Correctness outranks speed here.</strong> Anything touching dedupe or override
+       detection can change <em>which</em> mod wins or whether a mod is classed as force-loaded.
+       Snapshot the full mod list (UUID, version, flags) before and after and diff it.</p>
+  </div>
+</section>
+
+<section id="stage5">
+  <h2><span class="num">9</span>Stage 5 &mdash; Perf B: filter &amp; search</h2>
+  <p><span class="pill up">UPSTREAMABLE</span> <span class="branch">perf/filter</span>
+     <span class="pill fork">+ fork-only: fuzzy matching</span></p>
+
+  <div class="callout bad">
+    <p><strong>Hypothesis tested and rejected.</strong> Both earlier drafts assumed the
+       <code>Throttle(500ms)</code> at <code>MainWindowViewModel.cs:5250,5253</code> was most of the
+       felt slowness. <strong>It is not.</strong> Measured against the real 1&nbsp;121-mod load
+       (Debug build, UI Automation driving the real search boxes, CPU sampled to idle):</p>
+    <table>
+      <tr><th>Action</th><th>Settled at</th><th>Work <em>after</em> the 500 ms throttle</th></tr>
+      <tr><td>Inactive list, broad match (<code>a</code>)</td><td>3.77 s</td><td><strong>3.27 s</strong></td></tr>
+      <tr><td>Inactive list, cleared</td><td>1.87 s</td><td>1.37 s</td></tr>
+      <tr><td>Inactive list, <strong>no match</strong> (<code>zzzzzz</code>)</td><td>1.74 s</td><td>1.24 s</td></tr>
+      <tr><td>Active list, broad match (<code>e</code>)</td><td>1.89 s</td><td>1.39 s</td></tr>
+      <tr><td>Active list, cleared</td><td>1.84 s</td><td>1.34 s</td></tr>
+    </table>
+    <p>The throttle is <strong>at most a fifth</strong> of the delay. Even a search matching
+       <em>nothing</em> burns ~1.2&nbsp;s. Cutting the throttle to 150&nbsp;ms would save ~350&nbsp;ms
+       out of 1,700&ndash;3,800 &mdash; and would make things <em>worse</em> by firing that 1.2&nbsp;s
+       of work more often per keystroke. <strong>Fix the per-keystroke cost first; retune the throttle
+       last.</strong></p>
+  </div>
+
+  <h3>Where the time goes</h3>
+  <p><code>OnFilterTextChanged</code> (<code>:4199</code>) walks every mod and assigns
+     <code>DivinityModData.Visibility</code>; each row then collapses itself. One keystroke =
+     N property-change notifications + N container visibility changes + a full layout pass. Because
+     the items stay in the collection, the virtualizing panel still has to realize and collapse
+     containers instead of simply not having them &mdash; so virtualization (which <em>is</em> enabled,
+     <code>Recycling</code> mode) buys much less than it should.</p>
+
+  <div class="callout warn">
+    <p><strong>Requested feature: fuzzy matching.</strong> Konstantinos wants search to be fuzzy, not
+       just substring. This is a <em>behaviour</em> change on top of the perf work, and the two
+       interact: a naive fuzzy scorer run over 1&nbsp;121 names per keystroke would be far more
+       expensive than today's <code>Contains</code>, so it cannot be bolted onto the current design.
+       Doing the perf rework first is what makes fuzzy affordable.</p>
+    <p>Design notes for when this is picked up: keep the existing <code>@author foo</code> field
+       syntax (<code>:4178-4316</code>) working; score and <em>rank</em> rather than just include or
+       exclude; precompute a lowercase match key per mod once at load rather than per keystroke; and
+       decide explicitly whether fuzzy applies to the active list too, where order is meaningful and
+       reordering by score would be wrong.</p>
+  </div>
+
+  <h3>Order of work, measured-cheapest first</h3>
+  <ol>
+    <li><strong>Only assign <code>Visibility</code> when it actually changes.</strong> Compare before
+        writing. On a no-match search this should collapse ~1.2&nbsp;s toward nothing, and it is a
+        few lines. Do this first and re-measure &mdash; it may be most of the win.</li>
+    <li><strong>Hoist the per-keystroke allocations.</strong> Cache a lowercase name/author key per
+        mod at load time instead of rebuilding strings for 1&nbsp;121 mods on every filter pass.</li>
+    <li><strong>Re-measure, then retune the throttle</strong> &mdash; once a keystroke is cheap,
+        150&nbsp;ms becomes safe and the UI feels live.</li>
+    <li><strong>Then add fuzzy matching</strong> on the now-cheap path, with ranking.</li>
+    <li><strong>Only if still needed: move to real DynamicData filtering.</strong> The principled fix,
+        and the invasive one.</li>
+  </ol>
+
+  <div class="callout bad">
+    <p><strong>Step 5 is more invasive than it looks.</strong> The visibility-stamping design is
+       load-bearing: <code>ModListDropHandler</code> uses
+       <code>dropInfo.UnfilteredInsertIndex</code> <em>precisely because</em> the lists are
+       visibility-filtered rather than collection-filtered, and
+       <code>DivinityModData.IsSelected</code> refuses to become true while
+       <code>Visibility != Visible</code>. Converting to collection filtering means reworking
+       drag-and-drop insert indices and selection. Treat it as its own pass, and only on evidence.</p>
+  </div>
+</section>
+
+<section id="stage6">
+  <h2><span class="num">10</span>Stage 6 — The list workstream</h2>
+  <p><span class="branch">perf/list-render → feat/overrides-in-order → feat/categories</span></p>
+  <p>Three things that all rewrite the same surface. Doing them separately means rebuilding the mod
+     list three times, so they share a stage — but they stay separate branches, because the first is
+     upstreamable and the other two are not.</p>
+
+  <div class="callout bad">
+    <p><strong>The landmine.</strong> <code>MainResourceDictionary.xaml:461</code> contains
+       <code>&lt;Trigger Property="IsGrouping" Value="True"&gt;</code> →
+       <code>CanContentScroll="False"</code>. That is stock WPF boilerplate and is inert today.
+       But <code>CanContentScroll="False"</code> switches the ScrollViewer to pixel scrolling, which
+       <strong>disables UI virtualization</strong>. Implement categories with
+       <code>CollectionViewSource</code> grouping and you will silently destroy scrolling
+       performance on exactly the lists you just optimised.</p>
+    <p><strong>Therefore: categories are flat rows with divider items in one collection, not WPF
+       grouping.</strong></p>
+  </div>
+
+  <h3>6.1 Render performance <span class="pill up">UPSTREAMABLE</span>
+      <span class="branch">perf/list-render</span></h3>
+
+  <div class="callout bad">
+    <p><strong>Symptom, in the owner's words (2026-09-23):</strong> the inactive list is
+       <em>"not stuttery but not as smooth as I'd like"</em>; the active list has
+       <em>"lag/low framerate when grabbing the scroll bar and dragging it"</em>. The active list
+       holds 935 rows, the inactive roughly 186.</p>
+  </div>
+
+  <p><strong>Everything below was measured, not reasoned.</strong> A temporary harness
+     (<code>src/GUI/Util/PerfProbe.cs</code>, enabled by an extension-less <code>perfprobe</code>
+     file next to the exe, mirroring the <code>debug</code> convention) records frame pacing from
+     <code>CompositionTarget.Rendering</code> plus call counts and wall time on individual paths,
+     and dumps to the log every 5s and on exit. <strong>Twelve hypotheses were tested across two
+     sessions; the cause of the name-cell cost is identified and fixed</strong> (the green box below).
+     Do not re-litigate the rejected ones from first principles &mdash; the numbers are here.</p>
+
+  <table>
+    <tr><th>Hypothesis</th><th>Verdict</th><th>Evidence</th></tr>
+    <tr><td>Screen-reader reflection per row bind<br>(<code>ScreenReaderHelperBehavior</code>)</td>
+        <td><strong>NOT the cause</strong></td>
+        <td>Real but tiny: 3&nbsp;835 calls costing <strong>60&nbsp;ms out of a 5&nbsp;000&nbsp;ms
+            window</strong> (1.2%) while half the frames in it were dropped. ~14&nbsp;&micro;s each.
+            Still worth caching one day; it will not be felt.</td></tr>
+    <tr><td>Garbage collection</td><td><strong>NOT the cause</strong></td>
+        <td>gen2 collections <strong>0</strong> throughout, gen0 5&ndash;16 per window, heap flat
+            around 390&ndash;425&nbsp;MB.</td></tr>
+    <tr><td>Container churn / virtualization off</td><td><strong>NOT the cause</strong></td>
+        <td>Virtualization is on and recycling works: only <strong>106</strong> containers were
+            ever created across a whole session.</td></tr>
+    <tr><td>Column autosize walking all mods<br>(<code>AutoSizeNameColumn_*</code>)</td>
+        <td><strong>NOT the cause</strong></td>
+        <td>Only runs on <code>OrderJustLoaded</code>, never during scroll. It <em>is</em> where the
+            58 <code>MeasureText</code> glyph failures at startup come from.</td></tr>
+    <tr><td><code>Width="Auto"</code> on the Last Updated column</td>
+        <td><strong>Fixed, but changed nothing measurable</strong></td>
+        <td>Plausible feedback loop (realize rows &rarr; widest date changes &rarr; re-arrange all
+            rows), and Auto on a fixed-format date column is pointless, so the fix was kept
+            (<code>b123aff6</code>). Full-list Arrange stayed at 8&ndash;16&nbsp;ms either side of
+            it. <strong>Claim no credit for this one.</strong></td></tr>
+    <tr><td>Custom accessibility peers walking the visual tree</td>
+        <td><strong>NOT the cause</strong></td>
+        <td><code>AutomationInteropProvider.ClientsAreListening</code> is <code>True</code>, so a
+            client really is attached &mdash; but <code>AutomationPeer.GetChildren</code> recorded
+            <strong>zero calls</strong>. The subtree walks in
+            <code>CachedAutomationPeer</code> / <code>ModEntryGridAutomationPeer</code> never run
+            during scrolling. <em>Amended 2026-09-23 (session 2):</em> in 4 of ~25 scripted runs an
+            outside client <em>did</em> walk the tree mid-run &mdash; 6&nbsp;206 calls at
+            155&nbsp;&micro;s, once 9&nbsp;847 at 536&nbsp;&micro;s (5.3&nbsp;s). Not the name-cell
+            cost, but a real intermittent one; see "Next" below.</td></tr>
+    <tr><td colspan="3"><strong>Session 2 (2026-09-23), scripted scroll, 25 rows/frame</strong></td></tr>
+    <tr><td>The shared <code>ModToolTip</code> instance</td><td><strong>NOT the cause</strong></td>
+        <td>Removing the ToolTip from every row: name Arrange 222&nbsp;&micro;s, frame 33.7&nbsp;ms,
+            against a baseline pair of 204/228&nbsp;&micro;s and 33.3/34.0&nbsp;ms. WPF source agrees:
+            <code>ToolTipService.ToolTipProperty</code> has no layout flags and no callback, and a
+            closed tooltip keeps no link to any row.</td></tr>
+    <tr><td><code>Tag="{Binding}"</code> (with the ToolTip)</td><td><strong>NOT the cause</strong></td>
+        <td>218&nbsp;&micro;s, 33.6&nbsp;ms.</td></tr>
+    <tr><td>Font fallback / unusual characters in names</td><td><strong>NOT the cause</strong></td>
+        <td>A 36-character ASCII string (the UUID) costs 246&nbsp;&micro;s &mdash; cost tracks
+            <em>length</em>. Authors (~10 chars) 90&nbsp;&micro;s, names (avg 30.8) ~215.</td></tr>
+    <tr><td><code>TextFormattingMode=Display</code> / <code>HorizontalAlignment=Left</code></td>
+        <td><strong>NOT the cause</strong></td>
+        <td>209 / 182&nbsp;&micro;s in the app; headless, Stretch, Left and Display all land at
+            72&ndash;88&nbsp;&micro;s Measure and 78&ndash;102 Arrange.</td></tr>
+    <tr><td>Off-screen row cache (<code>CacheLength</code> 0 / 10 items)</td>
+        <td><strong>NOT the cause</strong></td>
+        <td>Only 28 rows are realized (26 visible). 207 / 204&nbsp;&micro;s, no frame change.</td></tr>
+    <tr><td>Automation ancestor walk at the top of <code>UIElement.Arrange</code></td>
+        <td><strong>NOT the cause</strong></td>
+        <td>~1&nbsp;&micro;s in the in-app split of one Arrange (see the green box).</td></tr>
+  </table>
+
+  <div class="callout good">
+    <p><strong>Resolved 2026-09-23: what the 248&nbsp;&micro;s was, and the fix.</strong> Committed
+       <code>2858a235</code> + <code>7fa83473</code> (both upstreamable; no TEMP code in either).</p>
+    <p><strong>First, the "50&times; slower than Measure" framing was a probe artifact.</strong> When a
+       recycled row gets a new mod, the name TextBlock's text changes while <code>ModEntryGrid</code>
+       is still clean, so WPF's layout manager measures the TextBlock <em>directly</em> from its queue
+       &mdash; <code>ModEntryGrid.MeasureOverride</code> never sees the text work. Its 7&nbsp;&micro;s is
+       Grid bookkeeping. Measured directly, a plain Author TextBlock in the same row costs
+       90&nbsp;&micro;s to arrange. Nothing was special about the name cell except its length.</p>
+    <p><strong>Ranked causes of the per-row cost</strong> (in-app, 25 rows/frame):</p>
+    <table>
+      <tr><th>#</th><th>Cause</th><th>Share of ~220&nbsp;&micro;s</th><th>Evidence</th><th>Status</th></tr>
+      <tr><td>1</td><td><strong>Redraw registers with an unfrozen, shared brush.</strong>
+          <code>DrawingContext.Close()</code> swaps the new drawing in; <code>RenderData.PropagateChangedHandler</code>
+          registers it with every unfrozen Freezable it uses and unregisters the old one. The row text
+          brush is an AdonisUI theme brush &mdash; unfrozen by design (its colour is a
+          <code>DynamicResource</code>) and shared by the whole window, so each swap costs time
+          proportional to its holders. Headless elements never pay it.</td>
+          <td>~120&nbsp;&micro;s</td>
+          <td>In-app split of one Arrange: before override 1.0, clip/RenderOpen 1.5, OnRender 6.0,
+              <strong>Close 118&ndash;122&nbsp;&micro;s</strong>; brush logs <code>IsFrozen=False</code>;
+              drawing with a frozen snapshot &rarr; Close 4&nbsp;&micro;s.</td>
+          <td><strong>Fixed</strong> <code>7fa83473</code></td></tr>
+      <tr><td>2</td><td><strong>Text re-shaped from scratch on every text change, twice.</strong>
+          TextBlock keeps nothing between strings: Measure shapes, then <code>OnRender</code> (run inside
+          Arrange) shapes again. ~3&ndash;4&nbsp;&micro;s per character, per pass.</td>
+          <td>~95&nbsp;&micro;s (+ ~70 unseen in Measure)</td>
+          <td>Headless over the 936 real names: TextBlock 72 + 80&nbsp;&micro;s; FormattedText 60 + 66;
+              drawing cached glyph runs 0.1 + 0.8. WPF source: <code>TextBlock.OnRender</code>
+              reformats every line; nothing caches glyph runs.</td>
+          <td><strong>Fixed</strong> <code>2858a235</code></td></tr>
+      <tr><td>3</td><td>Grid, border and icon strip around the text</td><td>~15&nbsp;&micro;s</td>
+          <td>Residual; icons alone 3&ndash;5&nbsp;&micro;s.</td><td>Left as is</td></tr>
+    </table>
+    <p><strong>The fix: <code>src/GUI/Controls/CachedTextBlock.cs</code></strong>, used for
+       <code>ModNameText</code> in <code>ModNameTemplate</code>. It shapes each distinct string once
+       via <code>FormattedText</code>, caches the glyph runs (shared, keyed by text, typeface, size,
+       DPI, formatting mode, direction and culture; 8&nbsp;192-entry cap), redraws them on later
+       appearances, and draws with a frozen snapshot of <code>Foreground</code>. It keeps a
+       <em>weak</em> subscription to the brush so theme switches still recolour. It keeps
+       TextBlock's hit-testing (tooltip over empty cell space), clipping and a Text automation peer.
+       <code>ModEntryGridAutomationPeer</code> now looks it up by the new type.</p>
+    <p><strong>One WPF quirk it works around:</strong> <code>FormattedText</code> pixel-snaps each line
+       with a <em>dynamic</em> guideline pair stored as (leading, offset). A <code>DrawingGroup</code>
+       records the pair verbatim, but <code>PushGuidelineSet</code> reads a dynamic pair back as
+       (leading, <em>driven coordinate</em>) and subtracts &mdash; a naive replay moves text a
+       sub-pixel. The replay set is rebuilt through <code>GuidelineSet</code>'s internal dynamic
+       constructor (reflection, once per new string, never per frame). If that constructor ever
+       disappears, the element falls back to drawing <code>FormattedText</code> &mdash; slower, never wrong.</p>
+    <p><strong>Fidelity, headless:</strong> all 936 names plus empty, whitespace, line-break, tab, CJK,
+       emoji, Hebrew and Arabic strings, each at plain / sub-pixel offset / 144&nbsp;DPI / both &mdash;
+       <strong>3&nbsp;784 renders, 0 pixel, size or hit-test differences, 0 fallbacks</strong>. Plus six
+       brush-mutation steps (recolour in place, swap brush, old brush changes after swap&hellip;),
+       all pixel-identical to TextBlock. In the app, both elements resolve the same font, size,
+       weight, foreground, formatting mode and language (<code>en-au</code>).</p>
+    <p><strong>Before / after</strong> &mdash; alternating runs of the build before either change and
+       the final build, same scripted workload (935 rows, 3 round trips):</p>
+    <table>
+      <tr><th>Metric</th><th>Before</th><th>After</th><th>Change</th></tr>
+      <tr><td>Name-cell Arrange per row, 25 rows/frame (3 pairs)</td><td>220 / 217 / 219&nbsp;&micro;s</td>
+          <td><strong>23 / 20 / 22&nbsp;&micro;s</strong></td><td><strong>&minus;90%</strong></td></tr>
+      <tr><td>UI-thread layout+render per frame</td><td>33.4 / 33.1 / 32.7 ms</td><td>24.7 / 25.4 / 25.3 ms</td><td>&minus;24%</td></tr>
+      <tr><td>Median frame</td><td>28 ms (35 fps)</td><td>21 ms (48 fps)</td><td></td></tr>
+      <tr><td>Frames over 33&nbsp;ms</td><td>36&ndash;40%</td><td>19&ndash;21%</td><td>~halved</td></tr>
+      <tr><td>p99 frame</td><td>88&ndash;97 ms</td><td>65&ndash;66 ms</td><td></td></tr>
+      <tr><td>Name-cell Arrange, 5 rows/frame</td><td>220&nbsp;&micro;s</td><td>20&nbsp;&micro;s</td><td>&minus;91%</td></tr>
+      <tr><td>Median frame, 5 rows/frame</td><td>7.8 ms (129 fps)</td><td>6.2 ms (160 fps)</td><td></td></tr>
+    </table>
+    <p>The shaping cache alone (<code>2858a235</code>) took the row from ~222 to ~127&nbsp;&micro;s; the
+       frozen brush (<code>7fa83473</code>) took it to ~21. The untouched Author TextBlock also got
+       cheaper (88 &rarr; 71&ndash;79&nbsp;&micro;s): fewer holders of the shared brush.</p>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>Next &mdash; what the thumb drag still costs (~25&nbsp;ms/frame at 25 rows/frame).</strong>
+       Ranked by expected payoff:</p>
+    <ul class="tight">
+      <li><strong>The other four text cells</strong> (Index, Version, Author, Last Updated) pay both costs
+          above: Author measured at 71&ndash;90&nbsp;&micro;s Arrange plus an unseen Measure, per row, per
+          cell. Converting them to <code>CachedTextBlock</code> is the same change again. Caveats: the
+          Index cell's <code>Background="Transparent"</code> and Version's
+          <code>TextAlignment="Left"</code> are redundant defaults to drop; <strong>the active list's
+          Author cell is wrapped by the TEMP <code>ProbeDecorator</code> from <code>ab73bf1f</code></strong>
+          &mdash; drop the TEMP commits first or expect a conflict there.</li>
+      <li><strong>Virtualizing panel Measure: ~8.5&nbsp;ms/frame</strong> at 25 rows/frame (recycling,
+          re-binding ~35 bindings per row, the other cells' measures). The largest single block left.</li>
+      <li><strong>Outside accessibility client walking the tree</strong> (see the amended row above):
+          intermittent, but up to 5&nbsp;s of a 16&nbsp;s run once. The custom peers' subtree walks
+          (<code>CachedAutomationPeer.GetChildrenCore</code>) are what it pays for.</li>
+      <li><strong>Hand thumb-drags trigger a whole-list Arrange</strong> (~50 per 5&nbsp;s, never in the
+          scripted runs). Inferred from source, not measured: WPF's layout queue holds 153 requests and,
+          once ~145 are queued, escalates to marking every ancestor dirty.</li>
+      <li><code>ScrollUnit="Pixel"</code> for the inactive list's "not smooth" complaint &mdash; still
+          untried; see below.</li>
+    </ul>
+  </div>
+
+  <div class="callout">
+    <p><strong>How to measure (the rig, all TEMP).</strong> Next to <code>bin\Debug\BG3ModManager.exe</code>:
+       a <code>perfprobe</code> file enables PerfProbe, and its <em>contents</em> are variant flags
+       (<code>step25</code>, <code>cache0</code>, <code>notooltip</code>, <code>notag</code>,
+       <code>uuidtext</code>, <code>display</code>, <code>left</code>, <code>notext</code>; empty =
+       baseline). An empty <code>perfscroll</code> file makes <code>PerfScrollDriver</code> wait for the
+       list to load, scroll the active list 3 round trips (5 rows/frame by default), write one
+       <code>[PerfProbe:scroll]</code> summary to <code>_Logs</code>, and close the app. About 20&nbsp;s
+       a run; <code>modsettings.lsx</code> stayed byte-identical through ~30 runs. Two identical
+       baselines agree within ~10% per row and ~2% per frame. The variant switches target a
+       <code>TextBlock</code> and are inert now the name is a <code>CachedTextBlock</code>. The
+       name-element split needs a hand edit of the template (see <code>9f2b1630</code>'s message).</p>
+  </div>
+
+  <details>
+  <summary>Session 1's working record &mdash; superseded by the green box above (kept for the history)</summary>
+  <div class="callout">
+    <p><strong>Where the time actually goes.</strong> Arrange, not Measure, and it is concentrated
+       in one place:</p>
+    <table>
+      <tr><th>Path</th><th>Calls</th><th>Total</th><th>Each</th></tr>
+      <tr><td><code>Arrange ActiveModsListView</code></td><td>252</td><td>4&nbsp;010 ms</td><td>15.9 ms</td></tr>
+      <tr><td><code>ModEntryGrid.Arrange</code> (one name cell)</td><td>14&nbsp;693</td><td>3&nbsp;648 ms</td><td><strong>248 &micro;s</strong></td></tr>
+      <tr><td>&nbsp;&nbsp;&#8627; icon strip Arrange (5 Images)</td><td>7&nbsp;114</td><td>36 ms</td><td><strong>5 &micro;s</strong></td></tr>
+      <tr><td><code>ModEntryGrid.Measure</code> (same cell)</td><td>20&nbsp;578</td><td>142 ms</td><td><strong>7 &micro;s</strong></td></tr>
+      <tr><td><code>ScreenReader reflection</code></td><td>14&nbsp;729</td><td>205 ms</td><td>14 &micro;s</td></tr>
+    </table>
+    <p><strong>Read those four numbers together.</strong> A whole-list Arrange of ~16&nbsp;ms is not
+       one expensive operation &mdash; it is 30&ndash;60 realized rows at ~248&nbsp;&micro;s each,
+       and <code>ModEntryGrid.Arrange</code> alone is 3.6 of the list's 4.0 seconds. The same
+       element <em>measures</em> in 7&nbsp;&micro;s, so the Grid and its child count are not the
+       problem. And the icon strip &mdash; five <code>Image</code> elements with trigger-driven
+       styles, the obvious suspect &mdash; costs <strong>5&nbsp;&micro;s, about 2%</strong>.</p>
+    <p><strong>So ~243 of the 248&nbsp;&micro;s belongs to the other half of the cell: the name
+       <code>TextBlock</code>.</strong> That is the open question, and it is where the next
+       session should start.</p>
+  </div>
+
+  <div class="callout">
+    <p><strong>What is odd about that, and worth checking first.</strong> A single-line
+       <code>TextBlock</code> arranging in 243&nbsp;&micro;s is roughly fifty times too slow. It is
+       declared in <code>ModNameTemplate</code> (<code>MainResourceDictionary.xaml:706</code>) with
+       <code>HorizontalAlignment="Stretch"</code>, <code>Tag="{Binding}"</code>,
+       <code>Text="{Binding DisplayName}"</code>,
+       <code>ToolTip="{StaticResource ModToolTip}"</code> and
+       <code>ToolTipService.IsEnabled="{Binding HasToolTip}"</code>.</p>
+    <p>Candidates, in the order a fresh pair of eyes should test them:</p>
+    <ul class="tight">
+      <li><strong>The shared <code>ModToolTip</code> instance.</strong> One
+          <code>AutomationTooltip</code> (~40 elements, 29 bindings) is assigned as the
+          <code>ToolTip</code> of every realized row's TextBlock at once. It is shared rather than
+          per-row, which is good, but a <code>ToolTip</code> is a <code>FrameworkElement</code> and
+          can only have one logical parent &mdash; so dozens of elements claiming the same instance
+          may be re-parenting it during layout. <strong>Prime suspect.</strong></li>
+      <li><strong>Text formatting per arrange.</strong> No <code>TextWrapping</code> is set, so it
+          should be one line, but glyph-run construction may be re-running because the row height
+          is not pinned. Test by fixing row height and by setting
+          <code>TextOptions.TextFormattingMode</code>.</li>
+      <li><strong>The <code>Tag="{Binding}"</code></strong>, which exists only so the shared tooltip
+          can reach the mod via <code>PlacementTarget.Tag</code>.</li>
+    </ul>
+    <p>The same bisect trick that cleared the icons will settle this: a
+       <code>ProbeTextBlock</code> timing its own <code>ArrangeOverride</code>, then removing the
+       ToolTip from the template for one run to compare. Both are non-destructive.</p>
+    <p><em>Outcome (session 2): the tooltip, the Tag and text formatting mode were each tested and
+       cleared; "text formatting per arrange" was right in spirit &mdash; see the green box.</em></p>
+  </div>
+  </details>
+
+  <div class="callout bad">
+    <p><strong>Do not confuse <code>ScrollUnit="Pixel"</code> with
+       <code>CanContentScroll="False"</code>.</strong> Both give pixel-smooth scrolling; only one is
+       safe. <code>VirtualizingPanel.ScrollUnit="Pixel"</code> keeps the
+       <code>VirtualizingStackPanel</code> in charge and <strong>keeps virtualization</strong>.
+       <code>ScrollViewer.CanContentScroll="False"</code> hands scrolling to the
+       <code>ScrollViewer</code> over the whole realized panel and <strong>disables
+       virtualization</strong> &mdash; fatal on a 935-row list. Never set the second on these
+       lists.</p>
+    <p><code>ScrollUnit</code> is still set nowhere in the repo, so both lists default to
+       <code>Item</code> and step a whole row per notch. That is the likely cause of the
+       <em>separate</em> "not smooth" complaint about the inactive list, and is still untried.</p>
+  </div>
+
+  <p><strong>Also found, not yet fixed:</strong> <code>ElementHelper.MeasureText</code>
+     (<code>:110-128</code>) has its <code>try/catch</code> <em>inside</em> the per-character loop,
+     so a name with N unmappable glyphs throws N exceptions rather than one. 58 per startup on this
+     mod set. Startup cost only, but a one-line fix &mdash; use
+     <code>CharacterToGlyphMap.TryGetValue</code> instead of catching.</p>
+
+  <div class="callout">
+    <p><strong>Branch state to inherit (updated 2026-09-23, session 2).</strong>
+       <code>perf/list-render</code> is cut from clean <code>master</code> and holds thirteen commits.
+       <strong>Five are real:</strong> <code>b123aff6</code> (Last Updated column width, no measured
+       benefit, safe to revert), <code>309b81ef</code> and <code>396d7b2f</code> (the two halves of the
+       selection fix), <code>2858a235</code> (<code>CachedTextBlock</code>: cached shaping) and
+       <code>7fa83473</code> (frozen-brush drawing). The rest are <strong>marked <code>TEMP:</code> and
+       must be dropped before any PR</strong> &mdash; plus <code>e38c87b2</code>, which only re-encodes
+       the TEMP <code>PerfProbe.cs</code>. They carry <code>PerfProbe.cs</code>,
+       <code>PerfScrollDriver.cs</code>, <code>ProbeStackPanel.cs</code>, <code>ProbeDecorator.cs</code>,
+       <code>ProbeVirtualizingStackPanel.cs</code>, <code>ProbeCachedTextBlock.cs</code>,
+       <code>ProbeSegmentDecorator.cs</code>, the timing hooks in <code>ModListView</code> /
+       <code>ModEntryGrid</code> / <code>CachedAutomationPeer</code> /
+       <code>ScreenReaderHelperBehavior</code>, the <code>ItemsPanel</code> setter and Author-cell
+       wrapper in <code>MainResourceDictionary.xaml</code>, the <code>MainWindow</code> hook, the
+       selection logging in <code>UpdateIsSelected</code>, and a change swapping
+       <code>MeasureText</code>'s exception logging for a counter. Keep the harness while the list
+       work is open; drop it, and restore that logging, when it closes. Nothing is pushed.</p>
+    <p><strong>Tested 2026-09-23 by cherry-picking the real commits onto <code>master</code></strong> in a
+       throwaway worktree: <code>b123aff6</code>, <code>2858a235</code> and <code>7fa83473</code> apply
+       cleanly, and the result has no probe references. <strong><code>309b81ef</code> conflicts</strong>
+       in <code>HorizontalModLayout.xaml.cs</code>: it was written on top of the TEMP selection logging
+       from <code>789ec87c</code>, so it needs a hand-resolved version for any PR. (Not built on bare
+       <code>master</code>; that needs the submodules set up in the worktree.)</p>
+  </div>
+
+  <h3>6.2 Overrides folded into the load order <span class="pill fork">FORK-ONLY</span></h3>
+  <p>Today force-loaded mods are deliberately excluded from the order unless
+     <code>IsForceLoadedMergedMod</code> or the user sets <code>ForceAllowInLoadOrder</code>
+     (CLAUDE.md §6). Folding them in is a <em>behaviour</em> change, not a UI one: the export path
+     (<code>BuildOutputList</code>) must keep writing a <code>modsettings.lsx</code> the game
+     accepts. Verify by exporting and booting the game, not just by looking at the list.</p>
+
+  <h3>6.3 Categories / dividers <span class="pill fork">FORK-ONLY</span></h3>
+  <ul class="tight">
+    <li>Model: a divider entry in <code>DivinityLoadOrder.Order</code> — needs a shape that
+        round-trips through the order JSON without confusing older builds or upstream.</li>
+    <li>Dividers must be skipped when building <code>modsettings.lsx</code>; the game must never see
+        them.</li>
+    <li>Collapsing a category is a view concern; the order indices underneath must not shift.</li>
+    <li>Drag-and-drop across a divider has to keep <code>mod.Index</code> contiguous — see the
+        renumbering loop in <code>ModListDropHandler</code>.</li>
+  </ul>
+
+  <figure>
+    <svg viewBox="0 0 620 230" role="img" aria-label="Mockup of a categorised load order list">
+      <g font-family="sans-serif" font-size="12">
+        <rect x="10" y="10" width="600" height="210" rx="8" fill="var(--panel)" stroke="var(--line)"/>
+        <rect x="22" y="22" width="576" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="34" y="38" fill="var(--ink)" font-weight="700">▼  Gameplay Overhauls</text>
+        <text x="560" y="38" fill="var(--muted)">3</text>
+        <g fill="var(--ink)">
+          <rect x="34" y="52" width="564" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="46" y="67">1.  Combat Extender</text>
+          <rect x="34" y="78" width="564" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="46" y="93">2.  Party Limit Begone</text>
+          <rect x="34" y="104" width="564" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+          <text x="46" y="119">3.  Tactician Enhanced</text>
+        </g>
+        <rect x="22" y="132" width="576" height="24" rx="5" fill="var(--amber-soft)" stroke="var(--amber)"/>
+        <text x="34" y="148" fill="var(--ink)" font-weight="700">▶  Overrides</text>
+        <text x="548" y="148" fill="var(--muted)">2 collapsed</text>
+        <rect x="22" y="162" width="576" height="24" rx="5" fill="var(--accent-soft)" stroke="var(--accent)"/>
+        <text x="34" y="178" fill="var(--ink)" font-weight="700">▼  Cosmetics</text>
+        <rect x="34" y="192" width="564" height="22" rx="4" fill="var(--bg)" stroke="var(--line)"/>
+        <text x="46" y="207" fill="var(--ink)">6.  Better Hair</text>
+      </g>
+    </svg>
+    <figcaption>Dividers are ordinary rows in one flat collection — collapsible, draggable,
+      and invisible to <code>modsettings.lsx</code>. Overrides become a normal category.</figcaption>
+  </figure>
+</section>
+
+<section id="stage7">
+  <h2><span class="num">11</span>Stage 7 — UI/UX refresh</h2>
+  <p><span class="pill fork">FORK-ONLY</span> <span class="branch">ui/*</span></p>
+  <p>Everything that isn't the mod list, after the list has settled. Working within AdonisUI rather
+     than replacing it keeps the diff reviewable and the theme system intact.</p>
+  <ul class="tight">
+    <li>Brush and spacing pass in <code>Themes/Light.xaml</code> + <code>Dark.xaml</code> —
+        <strong>they must stay key-for-key identical</strong>; a key defined in only one yields a
+        null brush in the other theme (CLAUDE.md §4).</li>
+    <li>Any new window needs a line added to <code>MainWindow.UpdateColorTheme</code>, or it is stuck
+        on whatever theme was live when it was constructed.</li>
+    <li>Settings are generated by reflection from <code>[SettingsEntry]</code>, not written in XAML —
+        restyling them means changing the generator, not a form.</li>
+  </ul>
+  <p><strong>Avalonia note:</strong> this is the stage a future port would throw away entirely.
+     If a port ever looks likely, keep behaviour in view models rather than code-behind.</p>
+</section>
+
+<section id="stage8">
+  <h2><span class="num">12</span>Stage 8 — Multi-order export</h2>
+  <p><span class="pill fork">FORK-ONLY</span> <span class="branch">feat/multi-order-export</span></p>
+  <p>Select several orders; produce one zip containing each order's JSON plus the union of their
+     mods, deduplicated. Cheap <em>if</em> Stage 2 already restructured the export around a set of
+     orders and a mod set; awkward otherwise. Dedupe by UUID, and decide explicitly what happens
+     when two orders reference different <em>versions</em> of the same mod — that is a real case,
+     and the naive union silently picks one.</p>
+</section>
+
+<section id="stage9">
+  <h2><span class="num">13</span>Stage 9 — The ambitious set</h2>
+  <p><span class="pill fork">FORK-ONLY</span> — <strong>each needs its own spec session before any
+     code.</strong> Listed here so the roadmap is honest about them, not because they are planned.</p>
+  <table>
+    <tr><th>Feature</th><th>What makes it hard</th></tr>
+    <tr><td>Update checker / downloader (Nexus + mod.io)</td>
+        <td>Nexus support exists but is disabled by a feature flag, the API key is stored in
+            plaintext with no UI, and the GitHub update path will NRE if enabled
+            (CLAUDE.md §7). The "Mod Updates" view is dead UI — nothing populates it. This is
+            reviving three half-built systems, not adding one.</td></tr>
+    <tr><td>Order syncing with friends</td>
+        <td>Needs a transport and a hosting story, plus version pinning per mod. The multi-order
+            export format from Stage 8 is the natural payload — design them together.</td></tr>
+    <tr><td>Native mod management</td>
+        <td>Touches the game's <code>bin</code> folder alongside the Script Extender's own
+            <code>DWrite.dll</code> — the one integration that currently works. High blast radius.</td></tr>
+    <tr><td>Mod page dependency/version checks</td>
+        <td>Rides on the Nexus work above.</td></tr>
+  </table>
+</section>
+
+<section id="risks">
+  <h2><span class="num">14</span>Risks</h2>
+  <table>
+    <tr><th>#</th><th>Risk</th><th>Mitigation</th></tr>
+    <tr><td>R1</td><td>A perf change alters which mod wins dedupe or override detection —
+        silently wrong load orders.</td>
+        <td>Snapshot/diff the full mod list before and after every Stage 4 change.</td></tr>
+    <tr><td>R2</td><td>Categories implemented via WPF grouping kill virtualization.</td>
+        <td>Flat rows with divider items. Called out in Stage 6.</td></tr>
+    <tr><td>R3</td><td>A bugfix built on fork-only work becomes unupstreamable.</td>
+        <td>Branch discipline in §3 — <code>fix/*</code> and <code>perf/*</code> cut from
+            <code>master</code>.</td></tr>
+    <tr><td>R4</td><td>Fork build self-updates to upstream and overwrites itself.</td>
+        <td>Stage 1, before any public release.</td></tr>
+    <tr><td>R5</td><td>Debug works, Publish breaks — the <code>_Lib</code> flattening plus the
+        <code>AssemblyResolve</code> hook (CLAUDE.md §2.4).</td>
+        <td>Test every stage in a <code>Publish</code> build, not only Debug.</td></tr>
+    <tr><td>R6</td><td>An upstream merge silently drops changes.</td>
+        <td>Never configure <code>merge.ours.driver</code>.</td></tr>
+    <tr><td>R7</td><td>Divider entries confuse the game or older builds.</td>
+        <td>Dividers stripped in <code>BuildOutputList</code>; verify by booting the game.</td></tr>
+    <tr><td>R8</td><td>Errors stay invisible because logging is off by default and
+        <code>ThrownExceptions</code> is unsubscribed everywhere.</td>
+        <td>Every fix in Stages 2–3 surfaces failures through <code>ShowAlert</code>.</td></tr>
+  </table>
+</section>
+
+<section id="verify">
+  <h2><span class="num">15</span>Verification</h2>
+  <h3>Stage 0</h3>
+  <ul class="tight">
+    <li>Debug build completes and the app launches against your real mod folder.</li>
+    <li><code>Publish</code> completes twice in a row and produces
+        <code>BG3ModManager_Latest.zip</code>.</li>
+    <li>Baseline numbers recorded (load time + mod count, scroll feel, filter latency).</li>
+  </ul>
+  <h3>Stage 2 — export</h3>
+  <ul class="tight">
+    <li>Export an order, then export <strong>again over the same filename</strong> with fewer mods.
+        The second zip opens cleanly. <em>This is the E1 regression test and it fails today.</em></li>
+    <li>Lock a <code>.pak</code> (open it in another program) and export — you get a visible warning
+        naming the mod, not a silent success.</li>
+    <li>Cancel an export midway — no partial zip is left behind, no <code>_Temp_*</code> folder remains.</li>
+  </ul>
+  <h3>Stage 3 — import</h3>
+  <ul class="tight">
+    <li>Round-trip: export an order, import it into a clean mods folder. Every mod and the order
+        itself come back.</li>
+    <li>Import a <strong>large</strong> order JSON (many mods) — this is the I1 case, and it is
+        size-dependent, so test with a big one deliberately.</li>
+    <li>Import an archive containing one deliberately corrupt <code>.pak</code> — the others still
+        import and you are told which one failed.</li>
+  </ul>
+  <h3>Stages 4–6</h3>
+  <ul class="tight">
+    <li>Load time improved against the Stage 0 baseline, with the mod list diff clean.</li>
+    <li>Typing in the search box feels immediate.</li>
+    <li>Scrolling a full list is smooth, <strong>and still smooth with categories in use</strong>.</li>
+    <li>Export a categorised order and boot the game — the load order applies correctly.</li>
+  </ul>
+</section>
+
+<footer>
+  Detailed reference. Quick view: <strong>plan-overview.html</strong> · Repo facts:
+  <strong>CLAUDE.md</strong>
+</footer>
+
+</div>
+</body>
+</html>
