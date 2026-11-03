@@ -1,0 +1,62 @@
+[
+  {
+    "id": "CLAIM-17",
+    "title": "Toolchain facts for .NET 10 and CI",
+    "location": "docs/review/areas/BLD.md BLD-01 and BLD-02; docs/review/stages/S1.md; Microsoft (.NET support policy, Visual Studio/MSBuild requirements) and GitHub actions/runner-images documentation",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Plausible",
+    "novelty": "CLAIM",
+    "docRef": "BLD-01, BLD-02, S1",
+    "notes": "Confirmed: (a) net10.0 needs VS 18.0+ and SDK 10.0.400 lists VS 18.0 as its minimum; (d) .NET 8 support ends 10 Nov 2026. (c) windows-latest is the VS 2026 image with no VC.14.44.17.14.CLI.Support; that a v143 C++/CLI build fails there is inferred. (b) No Microsoft source says net10 C++/CLI needs v145; BLD labels it inferred.",
+    "fixCaveats": "Settle (b) and (c) with a test CI build on windows-latest, with and without -p:PlatformToolset=v145. Pinning windows-2022 is only a precaution. The net10 branch needs a VS 18 image. A vcxproj needs VS MSBuild even under dotnet build."
+  },
+  {
+    "id": "CLAIM-14",
+    "title": "Drops into a filtered list land at the wrong load-order position",
+    "location": "src/GUI/ViewModels/ModListDropHandler.cs; gong-wpf-dragdrop 4.0.0 DropInfo (UnfilteredInsertIndex) source in scratchpad dl-gong/DropInfo.cs",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Refuted",
+    "novelty": "CLAIM",
+    "docRef": "S5-final",
+    "notes": "Filters only set item Visibility, so Items.Count equals the source count. Gong's correction branch never runs (DropInfo.cs:65), and InsertIndex from IndexFromContainer is already the model index (:269,:372). Collapsed rows fail hit tests (ItemsControlExtensions.cs:152). A drop lands next to the visible target row. With nothing visible, it appends to the end, not the top. Verifiers rated it Low.",
+    "fixCaveats": "A real related risk: a column-header sort adds SortDescriptions (HorizontalModLayout.xaml.cs:764), so a sorted-view index gets applied to the unsorted model. Model-based index computation is still worth doing for that case. The plan's line 736 is wrong to call UnfilteredInsertIndex load-bearing."
+  },
+  {
+    "id": "CLAIM-13",
+    "title": "The repo stores .cs files with LF line endings, contrary to CLAUDE.md's CRLF rule",
+    "location": "git ls-files --eol over src/**/*.cs in /home/user/BG3ModManager; .gitattributes; .editorconfig end_of_line",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "BLD-07; CLAUDE.md section 5",
+    "notes": "Of 185 src .cs files in the index, 168 are LF, 6 CRLF and 11 mixed (e.g. Program.cs); wt-perf shows 176/6/11. .gitattributes has only merge=ours lines. .editorconfig:15,251 and CLAUDE.md:436 both say CRLF, so following them would rewrite whole LF files. Correction: some files do store CRLF in the index. The layout comes from upstream.",
+    "fixCaveats": "Change CLAUDE.md, and ideally .editorconfig, to say keep each file's existing endings. Avoid a text=auto renormalisation commit: master tracks upstream, so every later upstream merge would conflict."
+  },
+  {
+    "id": "CLAIM-15",
+    "title": "Master can write an override pak's file-path UUID into modsettings.lsx",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs LoadModOrder ~L2093-2160 (ForceAllowInLoadOrder at ~2126-2128), AddActiveMod ~L4841; src/Core/Util/DivinityModDataLoader.cs GenerateModSettingsFile / BuildOutputList ~L1431-1490, LoadModSettingsFileAsync ~L831-878; DivinityModData.HasInvalidUUID",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "S6-final; HARV-52",
+    "notes": "The claim holds only after exporting the order as JSON (which includes ForceLoadedMods) and re-importing it, or hand-editing an order. LoadModOrder then sets ForceAllowInLoadOrder (MWVM.cs:2126-2128), and saving writes the pak path into a type=guid attribute (DataLoader.cs:1471-1483). On read-back, Guid parsing throws, the error is swallowed (:838-846), and the order resets. UI toggle, drag and txt import are blocked.",
+    "fixCaveats": "Add a write guard rejecting non-GUID UUIDs. Escape UUID/Folder in the XML, because '&' breaks LoadXml. Filter out override paks in the JSON export/import and in LoadModOrder. The Last Exported backup keeps re-applying a bad order until that is done."
+  },
+  {
+    "id": "CLAIM-16",
+    "title": "A failed update check reports 'up to date', and cancelling or failing an update download closes the app",
+    "location": "src/GUI/ViewModels/AppUpdateWindowViewModel.cs ~L39-43, ~L54-87; Autoupdater.NET 1.9.2 behaviour (source in scratchpad dl/au)",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "HARV-01",
+    "notes": "Both halves hold. AU raises CheckForUpdateEvent with only Error set (AutoUpdater.cs:548-552). The handler ignores args.Error, and WebHelper swallows the changelog error (WebHelper.cs:34-43), so it reports up-to-date (visible only on a manual check). A cancelled or failed download returns false (DownloadUpdateDialog.cs:268,334), yet Environment.Exit(0) runs unconditionally (AppUpdateWindowViewModel.cs:80-86). Medium: only the update flow is affected.",
+    "fixCaveats": "Check args.Error first and show a check-failed message. Exit only when DownloadUpdate returns true, and otherwise hide the window. Environment.Exit skips close handlers, so an unsaved load order can be lost. The WebException branch (L102-105) is effectively unreachable for check failures."
+  }
+]

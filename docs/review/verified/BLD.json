@@ -1,0 +1,98 @@
+[
+  {
+    "id": "BLD-01",
+    "title": "The whole solution reaches end of support in 7 days (.NET 8 EOL, 2026-11-10)",
+    "location": "src/GUI/GUI.csproj:5, src/Core/DivinityModManagerCore.csproj:3, src/Toolbox/Toolbox.csproj:4, External/lslib/LSLib/LSLib.csproj:3, External/lslib/LSLibNative/LSLibNative.vcxproj:26, External/lslib/LSLibStats/LSLibStats.csproj:3; README.md:11",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "All projects target net8.0* with no SelfContained/RollForward, and README.md:11 pins 8.0.15. EOL is 2026-11-10. Nothing breaks then: builds keep running but lose security patches. The update path is misattributed: MainWindowViewModel.cs:4912 only sets InstalledVersion, the check is AppUpdateWindowViewModel.cs:113, and URL_UPDATE (DivinityApp.cs:22) points at upstream.",
+    "fixCaveats": "Fix the README evergreen /8.0 link now. Do the net10 move together with the URL_UPDATE repoint and a changelog note that .NET 10 is required. Avoid RollForward=LatestMajor as a stopgap (C++/CLI untested). Only the exes (GUI, Toolbox) decide which runtime loads."
+  },
+  {
+    "id": "BLD-02",
+    "title": "The owner's toolchain cannot officially target net10, and the C++/CLI project raises the bar further",
+    "location": "Owner machine (CLAUDE.md §2.1: VS Build Tools 2022 17.14.41, MSVC v143, SDK 8.0.425 + 10.0.400); LSLibNative.vcxproj:36,42,48 (PlatformToolset v143)",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md §2.1 (toolchain table, SDK 10.0.400 line 83)",
+    "notes": "net10.0 is officially supported only on VS 18.0+, and SDK 10.0.2xx-4xx need MSBuild 18.0. Corrected failure mode: without global.json, 17.14 silently falls back to an older SDK (NETCoreSdkResolver.cs:163-168), so a net10 retarget fails with NETSDK1045. With a 10.x pin it fails with MSBuildSmallerThanMinimumVersion. Whether net10 C++/CLI needs v145 is inferred, not measured.",
+    "fixCaveats": "Install Build Tools 18.x side by side with the v143 C++/CLI component. If LSLibNative stays net8 (BLD-06 option A), v145 is not needed. Settle it on Windows with msbuild -getProperty:NETCoreSdkVersion and one v143 net10 build."
+  },
+  {
+    "id": "BLD-05",
+    "title": "LSLibStats is built in every configuration, referenced by nothing, and carries a second copy of the first-build parser trap",
+    "location": "BG3ModManager.sln:24, 145-164; External/lslib/LSLibStats/LSLibStats.csproj:8-31.",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md §2.2; plan §0.2a; AUDIT-CLAUDE 2.2m",
+    "notes": "Build.0 appears in all ten configurations. The only reference is StatParser (not in the sln). The generated .lex.cs/.yy.cs files are gitignored, so the first build on a clean clone fails as LSLib's does. Correction: the Execs have !Exists guards (LSLibStats.csproj:20-33), so they run on the first build only, not on every build.",
+    "fixCaveats": "Remove its Build.0 lines (or the project) from the sln, or extend the glob fix to its 10 generated files."
+  },
+  {
+    "id": "BLD-06",
+    "title": "LSLibNative (C++/CLI) is the one hard blocker for dotnet build, a cheap CI, Linux, and dropping the VC++ redistributable, and upstream already replaced it",
+    "location": "src/Core/DivinityModManagerCore.csproj:20; LSLib.csproj:44; native call sites LSLib/LS/Compression.cs:98,200, LS/PackageReader.cs:213 (LZ4 frame), VirtualTextures/Compression.cs:54,146, VirtualTextures/VirtualTexture.cs:354 (FastLZ), Granny/GR2/Reader.cs:256-409; README.md:11 (C++ redist prerequisite).",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md §2.1, §8 (setup-msbuild required); AUDIT-CLAUDE 2.1d, Gap 15",
+    "notes": "Confirmed as stated. Core and LSLib reference LSLibNative, and the mod manager's native path is LZ4 frame for chunked/solid paks. FastLZ is only in VirtualTextures and Granny2 only in GR2. Upstream LSLibNet uses net10.0, K4os LZ4/LZ4.Streams 1.3.8, DotFastLZ and YaccLexTools. This is platform and build debt, not a user-facing bug.",
+    "fixCaveats": "Replace LZ4FrameCompressor with K4os frame streams, swap or remove the FastLZ and Granny2 users, then drop both ProjectReferences. Check byte for byte against chunked and solid LZ4 paks. Performance neutrality is unmeasured."
+  },
+  {
+    "id": "BLD-07",
+    "title": "Line endings: the repo stores LF, CLAUDE.md says \"CRLF\", and there are no text/eol rules",
+    "location": ".gitattributes (21 merge=ours lines only); .editorconfig:15,251 (end_of_line = crlf); CLAUDE.md §5.",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "AUDIT-CLAUDE 5.3 and Gap 5 (contradicting CLAUDE.md §5 'CRLF')",
+    "notes": "All facts verified. .gitattributes has only merge=ours lines, .editorconfig:15,251 sets crlf, and notes/CLAUDE.md:436 says CRLF. src has 188 LF, 9 CRLF and 11 mixed files. sln/csprojs are CRLF; MainWindowViewModel.cs and the wt-perf files are LF. The .editorconfig rule makes editors and dotnet format write CRLF.",
+    "fixCaveats": "* text=auto will flag or normalise the existing CRLF/mixed files (sln, csprojs, DivinityModDataLoader.cs). Mark them -text or accept the churn. Also fix .editorconfig end_of_line=crlf, not just CLAUDE.md."
+  },
+  {
+    "id": "BLD-08",
+    "title": "The release zip is built from an uncleaned bin\\Publish with error-swallowing deletes and no check of its contents",
+    "location": "BuildRelease.py:33-41, 55-60; GUI.csproj:92-102 (only _Lib cleaned by pre-build); GUI.csproj:71-76.",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "HARV-05; AUDIT-CLAUDE 7.4",
+    "notes": "Confirmed: BuildRelease.py zips all of bin/Publish, its deletes swallow errors, and nothing checks the contents. A stray 'debug' file enables logging (MainWindow.xaml.cs:380). Correction: stale root DLLs are moved to _Lib and wiped by the next pre-build, so only non-DLL leftovers (Resources, Tools, markers) persist. The GUI.csproj lines should be 73-78 and 81-101.",
+    "fixCaveats": "Build releases from a clean tree or CI, and add a post-zip content check that fails loudly."
+  },
+  {
+    "id": "BLD-04",
+    "title": "Publish|Any CPU / PublishTest|Any CPU builds LSLib, LSLibNative and LSLibStats in Debug, so a release can ship a debug-CRT native DLL",
+    "location": "BG3ModManager.sln:113-114, 117-118 (LSLib -> Debug|Any CPU), :133-134, 137-138 (LSLibNative -> Debug|x64), :153-154, 157-158 (LSLibStats -> Debug); LSLibNative.vcxproj:35 (UseDebugLibraries=true for Debug).",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md §2.2; AUDIT-CLAUDE 2.2e/2.2f",
+    "notes": "The mapping is real, and Debug LSLibNative uses the debug CRT. GUI still builds Publish|x64 and makes the zip. It only bites if someone picks Any CPU, and no CI or script does, so it is a latent trap (Low). Correction: the native call is in Compression.cs:98, which LSFReader.cs:312 reaches through CompressionHelpers.Decompress.",
+    "fixCaveats": "Map the Publish/PublishTest|Any CPU rows to Release (Release|x64 for LSLibNative/LSLib), or delete the Any CPU platforms. The CI part of the fix is moot because there is no CI."
+  },
+  {
+    "id": "BLD-03",
+    "title": "No global.json, so the SDK is chosen by whatever happens to be installed",
+    "location": "Repo root (absent). Owner: SDK 8.0.425 and 10.0.400; windows-latest runner (VS 18.11) has SDKs 8.0.133/206/319/427, 9.0.x and 10.0.114/204/303/403.",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Plausible",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "No global.json on master or wt-perf. There is no CI (.github holds only ISSUE_TEMPLATE), so the CI drift is a planned risk. All TFMs are net8, so the .NET 10 behaviours are dormant, and the terminal logger is a dotnet-CLI default. Today it only affects which SDK the owner's machine picks; a Windows dotnet --version check would settle that.",
+    "fixCaveats": "Pinning 8.0.425 with latestPatch is sound, and the runner's 8.0.427 satisfies it. Land it with the first CI workflow and point setup-dotnet at global-json-file."
+  }
+]

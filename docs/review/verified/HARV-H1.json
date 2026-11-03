@@ -1,0 +1,38 @@
+[
+  {
+    "id": "HARV-27",
+    "title": "No build can import an archive of 2 GiB or more, and every import reads the whole file into memory",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3412 (ImportArchiveAsync), :3252 (ImportCompressedFileAsync)",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "plan Stage 3 I3; AUDIT-PLAN-11",
+    "notes": "Confirmed by 3/3 verifiers. Both importers allocate and read a throwaway buffer the size of the whole file, with no size check. On x64, new byte[long] throws OOM above Array.MaxLength (about 2 GiB) before the int cast runs. The catch then shows 'Error extracting archive'. The same code is on wt-perf and upstream avalonia. The '27 GB' figure is not in the owner notes.",
+    "fixCaveats": "Delete both the ReadAsync line and the Position=0 line, and keep IncreaseMainProgressValue. ArchiveFactory.Open reads the stream itself. Fix the same pattern in DivinityModDataLoader.cs:969 in the same commit. Test with a 2 GiB zip on Windows."
+  },
+  {
+    "id": "HARV-31",
+    "title": "Importing an archive order named \"Current\" corrupts the selected order or Current",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3112-3126; src/Core/Extensions/ModelExtensions.cs:29-42",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "AUDIT-PLAN-01",
+    "notes": "Confirmed by 3/3 verifiers. SetFrom copies all non-null properties, including bools. Case (b) is as stated. Case (a) is worse: Current keeps its modsettings.lsx FilePath but gets IsModSettings=false. The next save writes JSON into modsettings.lsx, and Export to Game throws at First(IsModSettings) (MWVM:2967). Importing your own export of Current reaches this path.",
+    "fixCaveats": "Never use SetFrom here. Use currentOrder.SetOrder(order) to copy entries only, or add the import as an 'Imported Current' order after a name-clash check. Guard against a null SelectedModOrder, and test that Name, FilePath and IsModSettings are preserved. Upstream avalonia has the same bug."
+  },
+  {
+    "id": "HARV-01",
+    "title": "Cancelling or failing the app-update download closes the app",
+    "location": "src/GUI/ViewModels/AppUpdateWindowViewModel.cs:39-43",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "CLAUDE.md section 8.1 (self-update hazard, area only)",
+    "notes": "Confirmed by 3/3 verifiers, all of whom downgraded it to Medium. Environment.Exit(0) runs even when AutoUpdater 1.9.2's DownloadUpdate returns false (cancel, download or checksum error, declined UAC), so unsaved order edits are lost. It is latent today, because the fork's version 1.0.12.9 equals the feed and Confirm stays disabled until a newer feed exists. The original path was missing src/.",
+    "fixCaveats": "Call Shutdown and Exit only when DownloadUpdate returns true. ZipExtractor waits for the process to exit. In the else branch, hide the window and show a Warning alert; this is safe on the main thread. Save the order, or prompt for it, before downloading, because the success path also exits without saving."
+  }
+]

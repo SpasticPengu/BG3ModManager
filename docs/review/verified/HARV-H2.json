@@ -1,0 +1,38 @@
+[
+  {
+    "id": "HARV-61",
+    "title": "All three pak import paths truncate the destination in place; on cancel or error the installed mod is destroyed",
+    "location": "Core/Util/DivinityFileUtils.cs:364 (via MWVM:1845 AddModFromFile); MWVM:3302 (ImportCompressedFileAsync); MWVM:3429 (ImportArchiveAsync)",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "AUDIT-PLAN-04, AUDIT-PLAN-02, plan Stage 3 I2",
+    "notes": "All three paths call File.Create on Mods/<name>.pak, which truncates it first. Cancel or IO error leaves a partial pak (DivinityFileUtils.cs:368). In ImportArchiveAsync, success is never reset per entry (MWVM:3386, 3443). Extra: TempFile.CreateAsync drains decompressionStream (MWVM:3279), so the compressed path likely writes a 0-byte pak even when it succeeds.",
+    "fixCaveats": "Write to a temp file in the same folder, parse it, then File.Move(tmp, dest, true). Reset success per entry, delete the temp in finally, and catch IOException when dest is locked. The compressed path must copy from tempFile.Stream after Seek(0). The rename also breaks hardlinks safely."
+  },
+  {
+    "id": "HARV-32",
+    "title": "An imported order with the same name as an existing one overwrites that order's file on save",
+    "location": "MWVM:3128 (AddNewModOrder), 2613-2618, 2633; DMDL:1106",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "AUDIT-PLAN-01",
+    "notes": "FilePath has no DataMember (DivinityLoadOrder.cs:29), so an imported order has FilePath null and Name = the entry's file name (MWVM:3468). AddNewModOrder does no duplicate check (2037-2062). Ctrl+S writes Name.json with FileMode.Create (MWVM:2613-2633, DMDL:1106) and silently overwrites the existing file. Needs a non-Current name that collides plus a manual save. One verifier rated it Medium.",
+    "fixCaveats": "Add a helper that returns a unique path (File.Exists, case-insensitive, sanitised name, ' (2)' suffix). Use it on import and in SaveLoadOrderAsync whenever FilePath is empty. Checking names alone misses sanitising clashes. Also rename the imported order so it stands apart in the list."
+  },
+  {
+    "id": "HARV-52",
+    "title": "Master can promote a meta-less override (UUID = pak path) into the active list and write a non-GUID UUID to modsettings.lsx",
+    "location": "MWVM:3802-3803 -> DMDL:1215-1236 -> MWVM:2126-2129, 2142 -> DMDL:1478-1482",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md section 6 (Vocabulary, Loader); AUDIT-PLAN table row 33",
+    "notes": "Chain holds: UUID=pakPath and IsForceLoaded (DMDL:604-639), JSON export includes it, LoadModOrder force-allows it without a HasMetadata check (MWVM:2126-2129), and the path is written into a guid attribute that LSLib rejects (NodeAttribute.cs:440-443). Medium because only a .json export plus re-import triggers it, and it can be undone. Folder is any built-in key. The UUID is not XML-escaped.",
+    "fixCaveats": "Force-allow only when IsForceLoaded && HasMetadata && !IsForceLoadedMergedMod. Skip and log non-GUID UUIDs at write time, and escape Folder/UUID with SecurityElement.Escape. Reading the file back is optional. Test T-B1 still has to confirm the Newtonsoft null-on-array step."
+  }
+]

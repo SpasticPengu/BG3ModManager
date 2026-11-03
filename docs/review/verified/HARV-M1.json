@@ -1,0 +1,110 @@
+[
+  {
+    "id": "HARV-22",
+    "title": "Cancelled export leaves a partial zip and the temp folder; cleanup can throw after the success alert (E3, E5)",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3595, 3650",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "plan Stage 2 E3, E5; AUDIT-PLAN claims 3, 5; AUDIT-PLAN-03",
+    "notes": "Cancelling between mods returns false inside the using block: the zip is incomplete and the temp folder is not deleted. Cancelling mid-write shows an 'Error writing' alert and leaves the partial zip. A failed CreatePackageAsync leaves a partial pak, but the success alert still fires. The non-recursive Directory.Delete at :3650, outside the try, then throws and skips OnMainProgressComplete, so the overlay stays stuck.",
+    "fixCaveats": "Write the zip to a temp file and rename it on success. Delete the partial zip on failure. Delete the temp folder recursively in a finally. Editor mods matter less, since the owner mostly uses paks."
+  },
+  {
+    "id": "HARV-10",
+    "title": "Tab is swallowed app-wide by the SwapListFocus hotkey",
+    "location": "src/GUI/ViewModels/AppKeys.cs:70; src/GUI/Views/MainViewControl.xaml.cs:34-41; src/GUI/Views/HorizontalModLayout.xaml.cs:605-616",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Plausible",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "Every hotkey is a window-level KeyBinding. SwapListFocus (Tab) can run whenever Enabled && !IsLocked, and CommandManager sets e.Handled, so KeyboardNavigation skips the Tab move. Filter TextBoxes have AcceptsTab=False, so Tab bubbles up and is swallowed. This breaks keyboard and screen-reader navigation. The single verifier was medium-confidence; confirming it needs a run on Windows.",
+    "fixCaveats": "whenAnyListFocused does not exist yet. Build it from IsKeyboardFocusWithin on the Active, Inactive and ForceLoaded list views and pass it to AddAction. The same issue exists in wt-perf at HorizontalModLayout.xaml.cs:648."
+  },
+  {
+    "id": "HARV-28",
+    "title": "The order-JSON entry read in an archive may come back short (I1)",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3461-3464",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Refuted",
+    "novelty": "KNOWN",
+    "docRef": "plan Stage 3 I1; AUDIT-PLAN claim 9",
+    "notes": "Refuted. The code ignores the single ReadAsync return value, but the SharpCompress 0.39 decoders fill the buffer: EntryStream passes reads through, and the Zlib, Deflate64, LZMA and Rar streams all loop until the count is met. Short reads only happen at a truncated or corrupt EOF. This is a Stream-contract hygiene issue, not a reachable bug.",
+    "fixCaveats": "Switching to ReadExactlyAsync or StreamReader.ReadToEndAsync is cheap hardening and stops relying on file.Size. Low priority; do it opportunistically."
+  },
+  {
+    "id": "HARV-02",
+    "title": "A failed update check reports \"up-to-date\"",
+    "location": "src/GUI/ViewModels/AppUpdateWindowViewModel.cs:54-87",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "Because CheckForUpdateEvent is subscribed (App.xaml.cs:39-45), AutoUpdater's ShowError raises the event with only Error set. The handler never checks Error, and WebHelper swallows the changelog failure, so the else branch shows 'Already up-to-date'. This only happens on a manual check. The message is misleading but nothing breaks.",
+    "fixCaveats": "Return early on args.Error, before the changelog download. Always log the error; call ShowAlert (Danger) only when _showAlert is set. AutoUpdater.ReportErrors has no effect once the event is subscribed."
+  },
+  {
+    "id": "HARV-04",
+    "title": "The update feed is trusted blindly, and a non-zip URL is executed directly",
+    "location": "src/GUI/ViewModels/AppUpdateWindowViewModel.cs:39, 70-79; src/GUI/App.xaml.cs:36-46",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "plan Stage 1 (Repoint the updater); BLD-15",
+    "notes": "There is no app-side validation, and AutoUpdater 1.9.2 ShellExecutes any non-zip download. But the feed is HTTPS from upstream LaughingLeader (DivinityApp.cs:22). Whoever can tamper with it can also swap the release zip, which ZipExtractor unpacks over the app folder. So the non-zip path adds little extra exposure.",
+    "fixCaveats": "A SHA256 in the same feed does not help, because the same attacker controls it. Point URL_UPDATE at the fork, check the HTTPS host prefix and file extension, and sign releases later (D2)."
+  },
+  {
+    "id": "HARV-08",
+    "title": "Menu shortcut labels go stale after a key is rebound",
+    "location": "src/GUI/Views/MainViewControl.xaml.cs:95",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "InputGestureText is set once from key.ToString(), and the Settings editor changes the same Hotkey instances. The label goes stale, but the shortcut itself works right away because Key and Modifiers are bound. A restart fixes the label. Cosmetic only.",
+    "fixCaveats": "Bind MenuItem.InputGestureTextProperty to DisplayBindingText with Source=key, the same way the Command binding is done."
+  },
+  {
+    "id": "HARV-25",
+    "title": "Split (multi-part) paks such as Foo_1.pak are never exported (E7)",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3597-3599; src/Core/Util/DivinityModDataLoader.cs:429-446",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "PakIsNotPartial drops <base>_<n>.pak files, and export writes only the base FilePath, so parts are omitted (also in wt-perf). LSLib only splits V16+ paks over 4 GiB (PackageWriter.cs:98-103), so this rarely happens.",
+    "fixCaveats": "Probe Package.MakePartFilename(path, 1..n), or read Metadata.NumParts, and export each part next to the base pak. CreatePackageAsync for editor mods could also produce parts."
+  },
+  {
+    "id": "HARV-26",
+    "title": "Exports leak the full Windows path, including the user name, of meta-less override paks (P1)",
+    "location": "src/Core/Util/DivinityModDataLoader.cs:620; src/GUI/ViewModels/MainWindowViewModel.cs:3802-3809 (text export), :3581 (archive order JSON)",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "",
+    "notes": "Confirmed for the JSON text export: a meta-less override has UUID = pakPath (which includes the user name). It is force-loaded and always appended to the export with UUID as a DataMember. The archive claim is overstated: the zip writes only SelectedModOrder, and meta-less mods cannot be toggled into it. The archive leaks only when an imported order already contains a path-UUID (MWVM:2126).",
+    "fixCaveats": "In FromMod/export, hash or redact any UUID that is not a GUID, keeping only the file name. The TSV and TXT exports use FileName and look safe, but check them."
+  },
+  {
+    "id": "HARV-29",
+    "title": "Two order JSONs with the same base name in one archive: the second is lost",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs:3468",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "AUDIT-PLAN-10",
+    "notes": "A case-sensitive Dictionary keyed by base name (:3397) throws on a duplicate in Add (:3468). The catch only records the error, and only the first order is imported. The app's own export writes one JSON, so only hand-built or multi-source archives are affected. The error is written to an _Logs file, so the loss is not fully silent.",
+    "fixCaveats": "Key by the full entry path, or add a suffix to duplicates (Main, Main_2). No export-side change is needed. Collisions need an exact case match. ImportCompressedFileAsync (:3236) is unaffected."
+  }
+]

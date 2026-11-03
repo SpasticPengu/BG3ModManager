@@ -1,0 +1,222 @@
+[
+  {
+    "old": "commit `fc35358` (2026-09-18/20).",
+    "new": "commit `fc35358` (2026-09-18/23); §2.1–2.2 also cover `fix/publish-prebuild-quoting`. Re-audited\nagainst `fc35358` on 2026-11-03 (docs/review/docs-corrections.md).",
+    "why": "Stale header date (AUDIT-CLAUDE S3): §2.1/§2.2 were re-verified on 2026-09-23 against branches beyond fc35358. Audited."
+  },
+  {
+    "old": "> clean `master` and never built on top of fork-only work.",
+    "new": "> clean `master` and never built on top of fork-only work.\n>\n> **These three files live on the orphan `notes` branch** (`origin/notes`, `9906953`), not in any code\n> branch. Read them from a separate worktree or keep an uncommitted copy; never commit them to a\n> `fix/*`, `perf/*` or `chore/*` branch, or they land in an upstream PR.",
+    "why": "AUDIT-CLAUDE H2 (Imprecise) and Gap 2: CLAUDE.md and the plan exist only on origin/notes; git ls-tree origin/perf/list-render has no CLAUDE.md. Audited."
+  },
+  {
+    "old": "**This fork currently has zero custom commits.** `git rev-list --left-right --count upstream/master...master`\n→ `0  0`. Everything below describes upstream's code as inherited.",
+    "new": "**`master` carries no fork commits** — it equals `upstream/master` at `fc35358`. Fork work lives on branches\npushed to `origin` (as of 2026-11-03): `fix/publish-prebuild-quoting` (`f6633a8`, `5f8a80a9`), `perf/list-render`\n(13 commits on `fc35358`: five fixes, seven `TEMP:` instrumentation commits and `e38c87b`, which only re-encodes\nthe TEMP `PerfProbe.cs`), and the orphan `notes` branch (`9906953`: this file and the plan). `fork/main` has not\nbeen pushed. List them with `git branch -r` and `git log --oneline master..origin/<branch>`. Everything below\ndescribes upstream's code as inherited unless it names a branch.\n\n`perf/list-render` keepers: `b123aff`; `309b81e` + `396d7b2` (ship together; `309b81e` sits on TEMP logging from\n`789ec87` and needs a hand-resolved version for a PR); `2858a23`, then `7fa8347` (it needs `2858a23` first). Everything\nelse there is instrumentation that must be dropped before any upstream PR. An empty `perfscroll` file next to the exe\nmakes that build scroll itself and exit.\n\nCloud/agent containers may be shallow and lack the `upstream` remote. Run\n`git remote add upstream https://github.com/LaughingLeader/BG3ModManager.git && git fetch --unshallow upstream`\nbefore any upstream comparison.",
+    "why": "AUDIT-CLAUDE 1.4 (Stale) and 1.3/Gap 3/Gap 4: git ls-remote origin shows fix/publish-prebuild-quoting 5f8a80a, perf/list-render 9f2b163, notes 9906953; git log fc35358..origin/perf/list-render = 13 commits (7 TEMP-prefixed + e38c87b + 5 fixes). Cherry-pick order from AUDIT-PLAN claims 30-31. Audited."
+  },
+  {
+    "old": "which wrongly says gplex goes in `External\\gplex\\`.",
+    "new": "which wrongly says gplex goes in `External\\gplex\\`. The csproj spells the path in lower case\n(`..\\external\\gppg\\binaries\\`, `LSLib.csproj:62-63`), which resolves only on a case-insensitive file system.",
+    "why": "AUDIT-CLAUDE 2.1g addition: LSLib.csproj:62-63 uses a lower-case path; relevant to 'Linux kept open'. Audited."
+  },
+  {
+    "old": "Also available: .NET SDK 10.0.400, Python 3.14, git 2.55. `gh` is authenticated as `SpasticPengu`.",
+    "new": "Also available: .NET SDK 10.0.400, Python 3.14, git 2.55. `gh` is authenticated as `SpasticPengu`.\n\n**.NET 8 reaches end of support on 2026-11-10.** Nothing breaks that day, but the runtime stops getting security\npatches (all six projects target `net8.0*`; README.md:11 pins runtime 8.0.15). Moving to `net10.0` needs MSBuild/VS 18.0\nor later: SDK 10.0.400 lists VS 18.0 as its minimum, so these Build Tools 17.14 cannot officially target it. Whether\nnet10 C++/CLI also needs the v145 toolset is unconfirmed. Install Build Tools 18 side by side before retargeting.",
+    "why": "BLD-01 (Confirmed) and BLD-02 (Confirmed); CLAIMS-3 CLAIM-17 parts (a) and (d) Confirmed, part (b) v145 unconfirmed. Verified."
+  },
+  {
+    "old": "configuration exists at all.)",
+    "new": "configuration exists at all.)\n\n**Don't build `Publish|Any CPU` or `PublishTest|Any CPU`.** Those solution platforms build LSLib, LSLibNative and\nLSLibStats in **Debug** (`BG3ModManager.sln:113-118,133-138,153-158`), so a release can ship a debug-CRT native DLL.",
+    "why": "BLD-04 (Confirmed, Low): sln maps the Any CPU publish rows to Debug for the lslib projects; LSLibNative.vcxproj:33-35 uses the debug CRT. Verified."
+  },
+  {
+    "old": "regenerated. Fix belongs in the lslib submodule.",
+    "new": "regenerated. Fix belongs in the lslib submodule.\n\n`External/lslib/LSLibStats/LSLibStats.csproj` has the same trap for ten more generated files, and the `.sln` builds\nit in every configuration although nothing references it (`BG3ModManager.sln:22,146-164`). A fix limited to\n`LSLib.csproj` still leaves the first build failing.",
+    "why": "BLD-05 (Confirmed): LSLibStats has Build.0 in all ten configurations, is referenced only by StatParser (not in the sln), and depends on gitignored generated parsers. Verified."
+  },
+  {
+    "old": "`BG3ModManager.sln:102-104` has",
+    "new": "`BG3ModManager.sln:104` (`Release|Any CPU`, `:102-103`, does build it) has",
+    "why": "AUDIT-CLAUDE 2.2o (Imprecise): only sln:104 lacks a Build.0; sln:102-103 builds Toolbox. Audited."
+  },
+  {
+    "old": "Toolbox (`:13`) and LSLib means **no symbols, no line numbers\nin anything but `Debug`.**",
+    "new": "Toolbox (`:13`), LSLib (`:15`) and LSLibNative (`:24`) means **no symbols, no line numbers\nfor those projects in anything but `Debug`.** The GUI never sets `DebugType`, so `BG3ModManager.dll` gets a portable PDB\nin Release and Publish, but Publish's `SetupLibFolder` deletes it (`GUI.csproj:94,98`).",
+    "why": "AUDIT-CLAUDE 2.2s (Imprecise) and BLD map (LSLibNative :24). Audited."
+  },
+  {
+    "old": "# Release zip — REQUIRES MSBuild AND python on PATH; fix the PreBuildEvent first",
+    "new": "# Release zip — REQUIRES MSBuild AND python on PATH; on a clean checkout build Debug once first (CrossSpeak pack trap, §2.2)",
+    "why": "AUDIT-CLAUDE 2.3b (Stale): contradicts §2.2, which says the PreBuildEvent works. Audited."
+  },
+  {
+    "old": "(`src/Core/AppServices/ScreenReaderService.cs:49-70`).",
+    "new": "(`src/Core/AppServices/ScreenReaderService.cs:49-70`). `_Lib` exists in **every**\nconfiguration, not only Publish: the `CrossSpeakLibraryFiles` target (`GUI.csproj:85-90`) copies those native DLLs\nthere after every build.",
+    "why": "AUDIT-CLAUDE 2.4e addition and Gap 12: GUI.csproj:85-90. Audited."
+  },
+  {
+    "old": "GUI breaks silently** — only a `[Toolbox]` line in the log shows it.",
+    "new": "GUI breaks silently** — only a `[Toolbox]` line in the log shows it. It also runs only when the `ScriptExtender`\n  feature is on, `Tools\\Toolbox.exe` and `DWrite.dll` exist and `ExtenderUpdaterSettings.UpdaterVersion >= 4`, and it\n  is killed after 120 s (`MainWindowViewModel.cs:420,426,447-450`).",
+    "why": "AUDIT-CLAUDE 3.3 addition and Gap 11: the other silent no-op paths. Audited."
+  },
+  {
+    "old": "`SaveSettings()` → `RefreshAsync` on the taskpool.",
+    "new": "`SaveSettings()` → `RefreshAsync`, started on the taskpool (`:4143`).\n   **It does not stay there.** Its first await is an `Observable.Start(..., RxApp.MainThreadScheduler)` (through\n   `SetMainProgressTextAsync`, `:2232-2238`, or `LoadSettings`), whose awaiter resumes inline on the Dispatcher. From then\n   on `LoadModsAsync` and `LoadModPackageDataAsync` run on the **UI thread**, one pak at a time: each per-pak task does a\n   synchronous `pr.Read` before its first await (`DivinityModDataLoader.cs:691-693,779-784`), so `Task.WhenAll` adds no\n   parallelism and `ConfigureAwait(false)` alone does not fix it. (Static analysis; a Windows run that logs thread IDs\n   would confirm it.)",
+    "why": "CLAIMS-2 CLAIM-07 (Confirmed, High): RefreshAsync starts on the pool (MWVM:4143) but resumes on the dispatcher after its first Observable.Start await (System.Reactive AsyncSubject awaiter). Verified."
+  },
+  {
+    "old": "Two copies both write `Data/settings.json` on a 250 ms debounce;\nlast writer wins silently.",
+    "new": "Two copies both write `Data/settings.json`; last writer wins silently. Most\nsaves are immediate `SaveSettings()` calls; only window-geometry saves go through the 250 ms `QueueSave`\n(`MainWindowViewModel.cs:1273-1278`, called from `MainWindow.xaml.cs:196,249`), which returns early while\n`!IsInitialized && IsRefreshing`.",
+    "why": "AUDIT-CLAUDE 3.13 (Imprecise) and Gap 10. Re-checked: QueueSave at MWVM:1273-1278. Audited."
+  },
+  {
+    "old": "`SourceCache<DivinityModData,string> mods` at `:80`, keyed by UUID",
+    "new": "`SourceCache<DivinityModData,string> mods` at `:82`, keyed by UUID",
+    "why": "AUDIT-CLAUDE 3.19 (Imprecise): the SourceCache is at MWVM:82. Audited."
+  },
+  {
+    "old": "(`MainWindowViewModel.cs:80`)",
+    "new": "(`MainWindowViewModel.cs:82`)",
+    "why": "AUDIT-CLAUDE 3.19 (Imprecise), second occurrence in §4 DynamicData: the SourceCache is at MWVM:82. Audited."
+  },
+  {
+    "old": "Every `ReactiveCommand`, every\nhotkey action,",
+    "new": "Every `ReactiveCommand`, most\nhotkey actions (5 of the 30 `.AddAction` calls, such as OpenLogsFolder, are in `InitSettingsBindings`, e.g. `:881`),",
+    "why": "AUDIT-CLAUDE 3.22 (Imprecise). Audited."
+  },
+  {
+    "old": "`Filter`/`AutoRefresh` predicates) — a deferred OAPH has no value until something subscribes.",
+    "new": "`Filter`/`AutoRefresh` predicates) — a deferred OAPH doesn't subscribe to its source until the first `.Value` read,\nand returns `initialValue` until then. Both helpers wrap `ToPropertyEx` (`:19`, `:35`), so they need a Fody-woven\n`[ObservableAsProperty] T Prop { get; }`; they can't back a hand-written `_field` OAPH.",
+    "why": "AUDIT-CLAUDE 4.4 (Imprecise) and Gap 6. Audited."
+  },
+  {
+    "old": "`MainWindowViewModel` predates these helpers and uses raw `_field` + `.ToProperty(...)`. New code\nshould use the helpers.",
+    "new": "In practice the helpers are used only in two Core models (`DivinityModData.cs`, `DivinityModManagerSettings.cs`).\nAll of GUI uses raw `_field` + `.ToProperty(...)` (45 sites, zero `[ObservableAsProperty]`), and Core has 26 raw\nsites. Match the file you're in: helpers on a Fody `[ObservableAsProperty]` model, raw `ToProperty` in a\n`_field`-style view model.",
+    "why": "AUDIT-CLAUDE 4.5 (Imprecise): following 'new code should use the helpers' in a GUI _field VM won't work as intended. Audited."
+  },
+  {
+    "old": "`RxApp.TaskpoolScheduler.ScheduleAsync(...)` (22 sites).",
+    "new": "`RxApp.TaskpoolScheduler.ScheduleAsync(...)` (15 sites in\n`MainWindowViewModel`, plus one `MainThreadScheduler.ScheduleAsync` at `:2594` and one in `SettingsWindowViewModel.cs:230`).",
+    "why": "AUDIT-CLAUDE 4.7 (Wrong). Re-checked by grep: 16 ScheduleAsync calls in MWVM (one on MainThreadScheduler at :2594) and 1 in SettingsWindowViewModel. Audited."
+  },
+  {
+    "old": "`canExecute` is always a named `IObservable<bool>` from `WhenAnyValue`, and\n`outputScheduler: RxApp.MainThreadScheduler` is passed explicitly on UI-touching commands.",
+    "new": "`canExecute`, when present, is usually a named `IObservable<bool>` built with `WhenAnyValue`, but many commands have\nnone (`RefreshCommand` `:4977`, `SaveSettingsSilentlyCommand` `:5369`) and some pass inline observables\n(`BaseProgressViewModel.cs:63`, `BaseHistoryViewModel.cs:92`). An explicit output scheduler is rare — one named\n`outputScheduler:` (`:4926`) and five positional `RxApp.MainThreadScheduler` arguments in the whole repo — so pass\n`RxApp.MainThreadScheduler` yourself whenever a command's subscribers touch the UI.",
+    "why": "AUDIT-CLAUDE 4.8 (Wrong), replacement text R4. Audited."
+  },
+  {
+    "old": "There are 22 `ScheduleAsync` sites in `MainWindowViewModel` where the same hazard lurks.",
+    "new": "There are 15 `TaskpoolScheduler.ScheduleAsync` sites in `MainWindowViewModel` where the same hazard lurks.\nSide effect of the fix: after `RefreshAsync`'s first `Observable.Start(..., MainThreadScheduler)` the rest of it runs on\nthe UI thread (§3, Startup order). **Rx drops any exception thrown inside these `ScheduleAsync` bodies** (only `OperationCanceledException` is handled),\nso it reaches neither `ThrownExceptions`, `RxApp.DefaultExceptionHandler` nor `DispatcherUnhandledException`, and the\nrepo has no `TaskScheduler.UnobservedTaskException` handler. `RefreshAsync` (`:2340-2557`) has no try/finally, so a throw\nthere leaves the progress overlay up and `IsRefreshing=true` until restart. Wrap new background work in try/catch/finally\nand route failures to `ShowAlert`.",
+    "why": "AUDIT-CLAUDE 4.20 (Wrong count); Gap 14 resolved by VM1-02 (reviewer-confirmed from code and Rx 6 source; stuck overlay Plausible until run on Windows; not yet in a verification ledger); CLAIM-07 (Confirmed) for the UI-thread side effect."
+  },
+  {
+    "old": "`SetFrom` also **skips null values**, so a property saved as `null` silently keeps its in-memory default.",
+    "new": "`SetFrom` also **skips null values**, so a property saved as `null` silently keeps its in-memory default.\n`settings.json` is written with `DefaultValueHandling.IgnoreAndPopulate` (`MainWindowViewModel.cs:1235`), so a value\nequal to its `[DefaultValue]` is omitted from the file and re-populated on load.\n\n`ExtenderSettings`/`ExtenderUpdaterSettings` are restored through the **untyped** `SetFrom<T>`\n(`MainWindowViewModel.cs:1128-1129`; `ModelExtensions.cs:29-42`), which copies every non-null property whether or not\nit has `[Reactive]`; boxed `bool`/`DateTime` values are never null. For the same reason never `SetFrom` a whole\n`DivinityLoadOrder`: it overwrites `IsModSettings` and keeps `FilePath`, which is how importing an archive's\n\"Current\" order can make a later Save write JSON into `modsettings.lsx` (`MainWindowViewModel.cs:3110-3127`).",
+    "why": "AUDIT-CLAUDE 4.23 (Imprecise) and Gap 9; AUDIT-PLAN-01 (Confirmed, High) and HARV-31 (Confirmed) for the DivinityLoadOrder case. Audited/verified."
+  },
+  {
+    "old": "That was bug `7b57e5a`.",
+    "new": "That was the bug `7b57e5a` fixed, and the same commit\nleft `Window`/`Confirmations` unrestored (see below).",
+    "why": "CLAIMS-2 CLAIM-10 (Confirmed): 7b57e5a replaced the all-properties Settings.SetFrom(settings) and so introduced the Window/Confirmations restore regression. Verified."
+  },
+  {
+    "old": "**nothing reads it** — the real exclusion is done by omitting `[Reactive]`.",
+    "new": "**nothing reads it** — the real exclusion is done by omitting `[Reactive]`.\n\n**`Settings.Window` and `Settings.Confirmations` are never restored from disk.** Both are `[DataMember]` without\n`[Reactive]` (`DivinityModManagerSettings.cs:112,122`), `SetFrom<T, ReactiveAttribute>` skips them, and nothing else\ncopies them (`MainWindowViewModel.cs:1127-1129`). `OnViewActivated` then calls `SaveSettings()` straight after\n`LoadSettings()` (`:4126-4133`), writing the defaults over the saved values. So \"Save Window Location\" never applies\n(`ApplyWindowPosition` gets -1 values, `MainWindow.xaml.cs:205-235`) and `DisableAdminModeWarning` is forgotten on every\nrestart. Fix by copying the fields into the existing instances (never reassign them; `WindowSettings` is a POCO, so copy\nits six fields by hand). Also note `ApplyWindowPosition` treats any negative X or Y as unset (`MainWindow.xaml.cs:231-232`),\nso a window on a monitor left of or above the primary still loses its position after that fix. Any new nested settings\nobject needs its own restore line or it repeats this bug.",
+    "why": "CLAIMS-2 CLAIM-10 (Confirmed, High) and AUDIT-CLAUDE Gap 1. Verified statically; a Windows run would show it. SVC-02 and VM1-06 (area reports) agree and add the negative-coordinate bug; re-checked MainWindow.xaml.cs:231-232."
+  },
+  {
+    "old": "and why programmatic multi-select on a filtered list appears to no-op.",
+    "new": "and why programmatic multi-select on a filtered list appears to no-op.\n- **`SelectedModOrder.Order` is rebuilt from `ActiveMods`.** Every `ActiveMods` `CollectionChanged` (Move included)\n  schedules `UpdateOrderFromActiveMods` 250 ms later (`:5401-5408`). It clears `Order` and re-adds entries through\n  `ToOrderEntry`, which copies only UUID and Name (`:4880-4888`; `DivinityModData.cs:299-306`). Export and save call it\n  too. A new per-entry field on `DivinityLoadOrderEntry` is wiped unless it is carried over by UUID; prefer an\n  order-level map keyed by UUID.\n- **Drag-drop indices.** With visibility filtering, gong's `UnfilteredInsertIndex` equals the model index, so drops\n  into a filtered list land correctly. A column-header sort adds `SortDescriptions` to the default view\n  (`HorizontalModLayout.xaml.cs:752-769`), and a drop into a sorted active list then inserts at the sorted-view index.\n- **Never enable WPF grouping on the mod lists.** `Themes/MainResourceDictionary.xaml:460-461` sets\n  `CanContentScroll=False` when `IsGrouping=True`, which turns virtualization off; `CanContentScroll=True` comes only\n  from AdonisUI's ListView style. Virtualization is `Recycling` (`HorizontalModLayout.xaml:119-120,223-224`) and\n  `VirtualizingPanel.ScrollUnit` is set nowhere. Categories are flat divider rows.",
+    "why": "CLAIMS-2 CLAIM-09 (Confirmed); CLAIMS-3 CLAIM-14 (Refuted that filtered drops misplace) and HARV-71 (Confirmed sorted-drop bug); AUDIT-PLAN claims 15-17 (Confirmed) and AUDIT-CLAUDE Gaps 7-8. Verified/audited."
+  },
+  {
+    "old": "Windows derive from `HideWindowBase<T>` and **cancel Closing / `Hide()` instead**.",
+    "new": "Secondary windows derive from `HideWindowBase<T>` and **cancel Closing / `Hide()` instead**; `MainWindow`\nderives directly from `AdonisWindow` (`MainWindow.xaml.cs:26`) and really closes.",
+    "why": "AUDIT-CLAUDE 4.32 (Imprecise). Audited."
+  },
+  {
+    "old": "`SettingsWindow.xaml` carries eight\n`clr-namespace:...;assembly=DivinityModManagerCore` declarations.",
+    "new": "`src/GUI` has 24\n`clr-namespace:...;assembly=DivinityModManagerCore` declarations across 10 XAML files — 7 in\n`Themes/MainResourceDictionary.xaml`, 4 in `SettingsWindow.xaml`.",
+    "why": "AUDIT-CLAUDE 4.33 (Wrong). Re-checked by grep: 4 in SettingsWindow.xaml, 24 in 10 files. Audited."
+  },
+  {
+    "old": "- **Hard tabs**, size 4. **CRLF.** `insert_final_newline = false`.",
+    "new": "- **Hard tabs**, size 4. **Line endings: keep each file's existing endings.** The index stores LF for most files\n  (`git ls-files --eol 'src/*.cs'`: 168 LF, 6 CRLF, 11 mixed; the `.sln`, the GUI and Core csprojs and three XAML files are CRLF) and `.gitattributes` has\n  no `text`/`eol` rule. A Windows working tree shows CRLF only through `core.autocrlf=true`. `.editorconfig:15,251`\n  says `crlf`, so don't let an editor or `dotnet format` rewrite a whole LF file, and don't add a `* text=auto`\n  renormalisation on the fork (master tracks upstream). `insert_final_newline = false`.",
+    "why": "AUDIT-CLAUDE 5.3 (Imprecise); CLAIMS-3 CLAIM-13 (Confirmed) and BLD-07 (Confirmed). Re-checked: 168 i/lf, 6 i/crlf, 11 i/mixed. Verified. Re-checked: BG3ModManager.sln, GUI.csproj, DivinityModManagerCore.csproj, MainResourceDictionary.xaml, MainViewControl.xaml, MainWindow.xaml are i/crlf; Toolbox.csproj is i/lf."
+  },
+  {
+    "old": "**Do not write `string?` in Core or GUI** — it yields CS8632.",
+    "new": "**Do not write `string?` in Core or GUI** — it yields warning CS8632 (Core already has a few, in\n`WebHelper.cs:11-16` and `DivinityJsonUtils.cs:29`); don't add more.",
+    "why": "AUDIT-CLAUDE 5.17 (Imprecise): CS8632 is a warning; VM1-20(b) adds DivinityJsonUtils.cs:29, re-checked by grep. Audited."
+  },
+  {
+    "old": "Enable via the `LogEnabled` setting, `DebugModeEnabled`, or **dropping an\nextension-less file named `debug` next to the exe**.",
+    "new": "Enable it with the `LogEnabled` setting (hidden from Preferences), or by **dropping an\nextension-less file named `debug` next to the exe**. The file also sets the VM-only `MainWindowViewModel.DebugMode`\n(`:325`), which keeps logging on even when `LogEnabled` is false. The `DebugModeEnabled` setting (\"Mod Developer Mode\")\ndoes **not** enable logging; it only shows developer UI. Any unhandled exception or `DisplayError` also switches logging\non (`MainWindow.xaml.cs:99,130,154`). A `debug` file left in `bin\\Publish` ships in the release zip and turns logging on\nfor every user.",
+    "why": "AUDIT-CLAUDE 5.25 (Wrong); CLAIMS-2 CLAIM-11 (Confirmed); BLD-08 (Confirmed) for the release-zip case. Verified."
+  },
+  {
+    "old": "When the settings window is open, use\n`SettingsWindowViewModel.ShowAlert` instead.",
+    "new": "When the settings window is open, use\n`SettingsWindowViewModel.ShowAlert` instead (it logs but does **not** scrub paths, `SettingsWindowViewModel.cs:120-122`).",
+    "why": "AUDIT-CLAUDE 5.27 note. Audited."
+  },
+  {
+    "old": "That's why `HasInvalidUUID` exists; never assume `Guid.Parse` succeeds.",
+    "new": "Never assume `Guid.Parse` succeeds.\n`HasInvalidUUID` does **not** catch these: `CheckForInvalidUUID` returns false unless `CanAddToLoadOrder`\n(`DivinityModData.cs:367-374`), and meta-less overrides can't be added. It flags orderable mods whose meta UUID is not a\nGUID, and such a mod is still exported. Master can also write an override's path into `modsettings.lsx`: the JSON text\nexport includes `ForceLoadedMods`, re-importing it makes `LoadModOrder` set `ForceAllowInLoadOrder`, and\n`GenerateModSettingsFile` writes the path into a `type=\"guid\"` attribute (`DivinityModDataLoader.cs:1471-1483`). On\nread-back the GUID parse throws, the error is swallowed (`:838-846`) and the order comes back empty. Guard every\nwrite with `Guid.TryParse`.",
+    "why": "AUDIT-CLAUDE 6.2 was marked Correct, but LOAD-23 (area report) shows HasInvalidUUID never fires for path UUIDs; re-checked DivinityModData.cs:367-374. CLAIMS-3 CLAIM-15 (Confirmed) for the write path. Audited/verified."
+  },
+  {
+    "old": "2. Add any new Larian module to **both** the `Mods` array **and** `IgnoreDependencies` — forgetting\n   the second produces a wave of false \"missing dependency\" reports.",
+    "new": "2. Add any new Larian module, with its UUID, to the `Mods` array. `DivinityModDataLoader.IgnoreModDependency`\n   (`:47-50`) already treats every `Mods` UUID as a satisfied dependency, and Larian paks found at load are added to\n   `IgnoredMods` automatically (`MainWindowViewModel.cs:1501-1509`). `IgnoreDependencies` is needed only for a UUID that\n   should count as installed without being in `Mods`. Upstream lists 16 of its 20 modules in both (Engine, Game, MainUI\n   and CrossplayUI are only in `Mods`); copying that convention is harmless and keeps diffs against upstream small.",
+    "why": "AUDIT-CLAUDE 6.4 (Wrong), replacement R7; CLAIMS-2 CLAIM-12 (Confirmed). Verified."
+  },
+  {
+    "old": "appear in the list\" are usually this, not a loading failure.",
+    "new": "appear in the list\" are usually this, not a loading failure.\n\n**Duplicate paks with equal versions:** the winner is the last pak to finish loading (a single-thread `ConcurrentBag`\nenumerates in reverse insertion order). That is the alphabetically last path when reads complete synchronously, and\ntiming-dependent when LZ4 entries are involved. The loser is offered for deletion.",
+    "why": "HARV-63 (Confirmed, Medium); mechanism from LOAD-05/LOAD-22 (area report, reviewer-confirmed; corrects S4-final's 'first in bag order'). Verified (outcome) / reviewed (mechanism)."
+  },
+  {
+    "old": "(`DivinityApp.cs:132`)",
+    "new": "(`DivinityApp.cs:135`)",
+    "why": "AUDIT-CLAUDE 6.17 (Imprecise): the discarded Path.GetFullPath is at DivinityApp.cs:135. Audited."
+  },
+  {
+    "old": "`AppContext.BaseDirectory`. Every settings/log/Orders path flows through this.",
+    "new": "`AppContext.BaseDirectory`. Almost every settings/log/Orders path (30 call sites) flows through this; `_Lib`\n  (`Program.cs:40`), the `debug` marker (`MainWindow.xaml.cs:380`) and one export fallback (`MainWindowViewModel.cs:2608`)\n  use `AppDomain.CurrentDomain.BaseDirectory` directly.",
+    "why": "AUDIT-CLAUDE 6.17 (Imprecise). Audited."
+  },
+  {
+    "old": "**Nexus Mods code ships but is disabled**; `\"Workshop\"` is never even queried.",
+    "new": "**Nexus Mods code ships but is disabled** — not completely: a non-empty `NexusModsAPIKey` still calls\n`NexusModsDataLoader.Init` whatever the flag says (`MainWindowViewModel.cs:1056-1066`). `\"Workshop\"` is never even queried.",
+    "why": "AUDIT-CLAUDE 7.2 (Imprecise). Audited."
+  },
+  {
+    "old": "`WebHelper` **swallows every exception** and returns `Stream.Null` / `\"\"`",
+    "new": "`WebHelper.DownloadFileAsStreamAsync` / `DownloadUrlAsStringAsync` **swallow every exception** (cancellation included)\nand return `Stream.Null` / `\"\"` (`WebHelper.cs:18-44`); the `GetAsync`/`PostAsync` wrappers (`:11-16`) let exceptions through",
+    "why": "AUDIT-CLAUDE 7.9 (Imprecise). Audited."
+  },
+  {
+    "old": "Licence is **MIT, © 2019 LaughingLeader** — keep the copyright notice.",
+    "new": "Licence is **MIT, © 2019 LaughingLeader** — keep the copyright notice.\n\n**The update window has two confirmed bugs** (`src/GUI/ViewModels/AppUpdateWindowViewModel.cs`). A failed check\n(network or feed error) reports \"up to date\", because the handler never reads `args.Error`. Cancelling or failing the\ndownload still calls `Environment.Exit(0)` (`:80-86`), which skips the close handlers. AutoUpdater 1.9.2 also checks no\nsignature, and a non-zip download URL is started directly. Fix these before relying on the updater for a fork release.",
+    "why": "CLAIMS-3 CLAIM-16 (Confirmed, Medium); HARV-01, HARV-02, HARV-04 (Confirmed). Verified."
+  },
+  {
+    "old": "4. Submodules are public, so `submodules: recursive` works without extra credentials.",
+    "new": "4. Submodules are public, so `submodules: recursive` works without extra credentials.\n5. **`windows-latest` is now the Server 2025 / VS 2026 image.** It has MSVC 14.44 but not the\n   `VC.14.44.17.14.CLI.Support` component, so a v143 C++/CLI build there may fail [inferred, not run]. Pin\n   `windows-2022` for the .NET 8 build, or settle it with one test run. Pin action major versions to whatever is\n   current when the workflow is written.\n6. `LSLibStats` adds ten more generated parsers to the first-build trap (§2.2).",
+    "why": "CLAIMS-3 CLAIM-17 part (c) image facts Confirmed, failure inferred (Plausible overall); AUDIT-CLAUDE 8.9; BLD-05 (Confirmed)."
+  },
+  {
+    "old": "| Script Extender update does nothing | built `Release\\|x64` (Toolbox skipped) or GUI-only (§2.2) |",
+    "new": "| Script Extender update does nothing | built `Release\\|x64` (Toolbox skipped) or GUI-only (§2.2); or `UpdaterVersion < 4`, no `DWrite.dll`, the `ScriptExtender` feature off, or the 120 s kill (§3) |",
+    "why": "AUDIT-CLAUDE 9.2 (Imprecise). Audited."
+  },
+  {
+    "old": "| Mass \"missing dependency\" after a patch | new Larian module missing from `IgnoreDependencies` (§6) |",
+    "new": "| Mass \"missing dependency\" after a patch | new Larian module missing from IgnoredMods.json `Mods` (§6) |",
+    "why": "AUDIT-CLAUDE 9.3 (Wrong, derived from 6.4); CLAIMS-2 CLAIM-12 (Confirmed). Verified."
+  },
+  {
+    "old": "| Fork build updates itself to upstream | `URL_UPDATE` still points at LaughingLeader (§8.1) |",
+    "new": "| Fork build updates itself to upstream | `URL_UPDATE` still points at LaughingLeader (§8.1) |\n| Window position / admin-warning opt-out forgotten on restart | `Settings.Window`/`Confirmations` are never restored (§4) |\n| `modsettings.lsx` comes back empty after a save | a non-GUID UUID (override pak path) was written (§6) |\n| Saved an order and `modsettings.lsx` now holds JSON | an archive import ran `SetFrom` over the Current order (§4) |",
+    "why": "Gotcha rows for CLAIM-10, CLAIM-15 and AUDIT-PLAN-01/HARV-31 (all Confirmed). Verified."
+  }
+]

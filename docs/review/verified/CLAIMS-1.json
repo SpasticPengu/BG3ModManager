@@ -1,0 +1,74 @@
+[
+  {
+    "id": "CLAIM-01",
+    "title": "Plan I1 is misdiagnosed: SharpCompress 0.39 zip entry streams cannot short-read, and SafeDeserialize returns a partial order rather than null",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs ~L3440-3470; src/Core/Util/DivinityJsonUtils.cs ~L20-40; SharpCompress 0.39 zip entry streams",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 3 I1; AUDIT-PLAN",
+    "notes": "SourceStream.Read (stored) and ZlibBaseStream.Read (deflate) loop until the buffer is full. LZMA and RAR fill it too. Newtonsoft's handled errors log and return a partial object; null only for errors outside a property-value try. Separate gap: after open, entries with a data descriptor report Size=0, so the JSON is skipped silently.",
+    "fixCaveats": "Keep ReadExactlyAsync or a MemoryStream copy as hardening. Copy until the stream ends instead of sizing from file.Size. Log null or partial deserializes. Look elsewhere (schema mismatch, I2) for the real loss cause."
+  },
+  {
+    "id": "CLAIM-05",
+    "title": "The measured 1.2-3.3 s filter cost is not explained by OnFilterTextChanged's loop",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs ~L4199-4316, ~L5240-5260; src/GUI/Views/HorizontalModLayout.xaml; src/GUI/Themes/MainResourceDictionary.xaml; plan Stage 0.3 method",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Plausible",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 0.3 / Stage 5",
+    "notes": "Loop cost is milliseconds: one culture-aware IndexOf plus a RaiseAndSetIfChanged setter per mod. Likely causes are the UIA peer tree walk, idle sampling or Debug JIT, and container realization when rows collapse (ScreenReader reflection), which the loop drives. 'Flat' is weakly supported: no active-list no-match run was measured.",
+    "fixCaveats": "Profile first. Add an active-list no-match run, a control run with filtering disabled, and one run without UIA attached. Plan step 1 is already done by RaiseAndSetIfChanged."
+  },
+  {
+    "id": "CLAIM-03",
+    "title": "Stage 5 step 1 saves nothing: Visibility and IsSelected setters already skip equal values",
+    "location": "src/Core/Models/DivinityBaseModData.cs ~L69; src/Core/Models/DivinityModData.cs ~L194; ReactiveUI.Fody 19.5.41 weaving",
+    "originalSeverity": "High",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 5 step 1",
+    "notes": "Visibility is a [Reactive] auto-property, woven by Core's FodyWeavers.xml into RaiseAndSetIfChanged, which returns early on equal values. IsSelected already calls RaiseAndSetIfChanged. Every filter branch sets each mod's Visibility once (MainWindowViewModel.cs:4199-4312). wt-perf is identical.",
+    "fixCaveats": "A guard prevents no notifications or layout work. Keep it only to count changed rows, or drop it. Real cost is the matching and re-layout of changed rows."
+  },
+  {
+    "id": "CLAIM-04",
+    "title": "Stage 5 step 2 saves nothing: the plain search path allocates no per-mod strings",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs OnFilterTextChanged ~L4199-4316; DivinityModFilterData matching helpers",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 5 step 2",
+    "notes": "The plain path does a CurrentCulture IgnoreCase IndexOf on the Name auto-property, with no ToLower and no substrings. Correction: the comparison is culture-aware, not ordinal. The @ path makes no per-mod strings (Split only if separateWhitespace, which is never passed), but has a per-mod closure for @Tag and DateTime.TryParse for @Modified.",
+    "fixCaveats": "Hoisting lowercase keys removes no allocations. Only CPU gain is possible, via OrdinalIgnoreCase or a precomputed key (measure first). Retitle or drop step 2. On the @ path, cache the parsed date and avoid closures."
+  },
+  {
+    "id": "CLAIM-02",
+    "title": "Plan E6 is moot: the 1d / modPaks.Count division never takes effect when modPaks is empty",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs ~L3565-3600 (ExportLoadOrderToArchiveAsync)",
+    "originalSeverity": "Low",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 2 E6",
+    "notes": "Double division gives +Infinity, with no exception (:3575). The only read is inside foreach over modPaks (:3593, :3628), which never runs when the list is empty. The export still succeeds. The plan rates it HIGH (cosmetic) and gives L3574, but the code is at L3575.",
+    "fixCaveats": "Downgrade E6 to trivial. An optional guard 'modPaks.Count > 0 ? 1d / modPaks.Count : 0' protects future refactors such as Stage 8 multi-order."
+  },
+  {
+    "id": "CLAIM-06",
+    "title": "MeasureText's 58 startup exceptions don't come from '=' divider names",
+    "location": "src/GUI/Util/ElementHelper.cs ~L100-133; src/GUI/Views/HorizontalModLayout.xaml.cs ~L846, ~L910",
+    "originalSeverity": "Low",
+    "finalSeverity": "Low",
+    "status": "Plausible",
+    "novelty": "CLAIM",
+    "docRef": "plan Stage 0.3 / 6.1",
+    "notes": "Only the CharacterToGlyphMap indexer throws, once per unmapped UTF-16 unit (ElementHelper.cs:112, catch :124). The default Segoe UI maps ASCII '='. Only longestName is measured. The 58 misses are likely non-Latin text, emoji surrogate halves, or fullwidth or box-drawing lookalikes of '='.",
+    "fixCaveats": "TryGetValue is the right fix. The exact characters are unverified without a Windows run; log the strings and code points that miss."
+  }
+]

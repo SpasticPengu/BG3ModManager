@@ -1,0 +1,74 @@
+[
+  {
+    "id": "CLAIM-07",
+    "title": "All mod loading runs one pak at a time on the UI thread",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs OnViewActivated ~L4105-4166, RefreshAsync ~L2340-2558, LoadModsAsync ~L1609-1720; src/Core/Util/DivinityModDataLoader.cs LoadModPackageDataAsync ~L745-810, per-pak loaders ~L466-745",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "S4-final",
+    "notes": "RefreshAsync starts on the pool (L4143). Its first await on Observable.Start(MainThreadScheduler) at L2232-2238/2373 runs the continuation inline on the dispatcher (Rx AsyncSubject.cs:369-401). From then on, LoadModsAsync and LoadModPackageDataAsync run on the UI thread. A synchronous pr.Read (DivinityModDataLoader.cs:692) runs before any await, so the loop at L779-784 is serial and WhenAll adds nothing. The CLAUDE.md thread-pool claim is stale.",
+    "fixCaveats": "ConfigureAwait(false) alone does not fix this: the Rx awaiter causes the hop and pr.Read is synchronous. Offload the pak loop with Task.Run or Parallel.ForEachAsync and bounded parallelism. A Windows thread-ID log would confirm it."
+  },
+  {
+    "id": "CLAIM-09",
+    "title": "Per-entry fields on DivinityLoadOrderEntry would be lost because Order is rebuilt from ActiveMods",
+    "location": "src/GUI/ViewModels/MainWindowViewModel.cs UpdateOrderFromActiveMods ~L4880-4888, constructor subscription ~L5401-5408, ExportLoadOrderAsync ~L2901",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "LIB-final",
+    "notes": "UpdateOrderFromActiveMods runs Order.Clear plus AddRange(ActiveMods,true) at L4880-4888. ToOrderEntry copies only UUID and Name (DivinityModData.cs:299-306). The rebuild runs 250 ms after every CollectionChanged event (L5401-5408), and on export and save (L2901, 2602, 2653, 3700, 3775). Entry.Clone copies UUID, Name and Missing only. wt-perf has the same code. Saying pins 'must' go elsewhere overstates it, since the rebuild could carry fields over by UUID.",
+    "fixCaveats": "Prefer a top-level Pins map keyed by UUID, or carry fields over in UpdateOrderFromActiveMods, ToOrderEntry and Entry.Clone. With a map, DivinityLoadOrder.Clone() and the 'New' order at ~L2056 must copy it."
+  },
+  {
+    "id": "CLAIM-10",
+    "title": "Settings.Window and Settings.Confirmations are never restored on load",
+    "location": "src/Core/Models/DivinityModManagerSettings.cs ~L112, ~L122; SetFrom<T, ReactiveAttribute> (src/Core/Extensions); MainWindowViewModel.cs LoadSettings ~L1112-1222; src/GUI/Views/MainWindow.xaml.cs",
+    "originalSeverity": "High",
+    "finalSeverity": "High",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "AUDIT-CLAUDE gap",
+    "notes": "Both properties are [DataMember] without [Reactive], and SetFrom<T,Reactive> skips them (ModelExtensions.cs:44-56; MainWindowViewModel.cs:1127-1129). ApplyWindowPosition gets -1 values (MainWindow.xaml.cs:205-235). The SaveSettings call right after LoadSettings (L4126-4133, 4150) then overwrites the saved values with defaults. Commit 7b57e5a introduced the regression. One verifier rated it Medium because it is UX only.",
+    "fixCaveats": "After L1127, copy the Window fields in place (it is a POCO, so SetFrom does not apply) and call Settings.Confirmations.SetFrom(settings.Confirmations), with null guards. Never reassign either object. Document the SetFrom limitation in CLAUDE.md."
+  },
+  {
+    "id": "CLAIM-08",
+    "title": "The screen-reader probe runs about four times per mod during load and reloads Tolk each time when no reader runs",
+    "location": "src/Core/AppServices/ScreenReaderService.cs; External/CrossSpeak; callers in Core models and loaders",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "S4-final",
+    "notes": "Partly true. HasToolTip WhenAnyValue (DivinityModData.cs:521-524) probes 3-4 times per mod. Tolk is not reloaded: with no reader, CrossSpeak calls Initialize each time (ScreenReaderWindows.cs:23-41), but Tolk_Load returns early once it has loaded (Tolk.cpp:31-46,88-108). Each call costs a CoInitializeEx plus about five cheap driver probes, likely milliseconds to tens of milliseconds in total.",
+    "fixCaveats": "Cache the active state in ScreenReaderService (at startup, or refreshed on a timer or event) and skip repeat Initialize calls when no reader was found. Measure on Windows first; the startup cost is likely small."
+  },
+  {
+    "id": "CLAIM-11",
+    "title": "DebugModeEnabled does not turn logging on",
+    "location": "src/GUI/Views/MainWindow.xaml.cs ~L73, ~L380-443; DivinityModManagerSettings DebugModeEnabled and LogEnabled",
+    "originalSeverity": "Low",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "CLAUDE.md section 5",
+    "notes": "ToggleLogging checks its argument and ViewModel.DebugMode (MainWindow.xaml.cs:71-94). That plain bool is set only via the 'debug' file (L380-383, 440-443). DebugModeEnabled feeds only DeveloperModeEnabled, the dependency filter and visibility bindings (MainWindowViewModel.cs:325, 861, 4949). Logging is turned on by LogEnabled (L1010, 1154-1157), the debug file and the error handlers. wt-perf behaves the same.",
+    "fixCaveats": "Correct CLAUDE.md §5: logging comes from LogEnabled (hidden from the UI) or a 'debug' file next to the exe, which also sets DebugMode. Error handlers force it on temporarily, and DebugModeEnabled does not enable it."
+  },
+  {
+    "id": "CLAIM-12",
+    "title": "New Larian modules only need adding to IgnoredMods.json's Mods array, not IgnoreDependencies",
+    "location": "src/Core/Util/DivinityModDataLoader.cs ~L40-56; src/GUI/Resources/IgnoredMods.json; dependency checks in DivinityModData and the missing-dependency UI",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "CLAIM",
+    "docRef": "CLAUDE.md section 6",
+    "notes": "IgnoreModDependency checks IgnoredDependencyMods or IgnoreMod, which uses IgnoredMods built from Mods (DivinityModDataLoader.cs:42-50, 1403). Every missing-dependency path goes through it (MainWindowViewModel.cs:1527, 1720-1724, 2735), and ModIsAvailable checks both sets (L765). Larian paks found at load are added automatically (L1501-1509). All 16 IgnoreDependencies UUIDs are already in Mods.",
+    "fixCaveats": "Correct CLAUDE.md §6 step 2 and the troubleshooting row at L715: adding a module with its UUID to Mods is enough. IgnoreDependencies is needed only for UUIDs that are not in Mods, and adding a module to both does no harm."
+  }
+]

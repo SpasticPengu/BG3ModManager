@@ -1,0 +1,110 @@
+[
+  {
+    "id": "HARV-33",
+    "title": "Importing a mod replaces the installed one by UUID even when it is older",
+    "location": "MWVM:3160-3227",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "AUDIT-PLAN-04",
+    "notes": "AddImportedMod swaps by UUID with no version check (MainWindowViewModel.cs:3172-3192). All three import paths call it (:1853, :3323, :3451). Refresh keeps the highest VersionInt (DivinityModDataLoader.cs:787-805). When file names match, the newer pak on disk is overwritten, so the downgrade is real.",
+    "fixCaveats": "Compare versions and confirm before a downgrade. Check before overwriting a same-named pak. Use Version.VersionInt, as refresh does, not Version64."
+  },
+  {
+    "id": "HARV-53",
+    "title": "One unparseable entry in modsettings.lsx reads as a total reset",
+    "location": "DMDL:838-845; MWVM:2283-2292, 5420-5445",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "CLAUDE.md section 6 Loader (names LoadModSettingsFileAsync only)",
+    "notes": "Parse failures are swallowed and return null, which gives empty ActiveMods (DivinityModDataLoader.cs:838-847, 963-978). LSLib new Guid(str) throws on one bad UUID (NodeAttribute.cs:440-448). Both reset detectors (MainWindowViewModel.cs:2287-2298, 5426-5440) then report an external reset and never mention a read error.",
+    "fixCaveats": "Return a parse-failed flag and the exception, and skip the restore offer. Change the catch inside the overload too. Treat the profile loader (DMDL:931) the same way, and stop the startup Yes from overwriting silently."
+  },
+  {
+    "id": "HARV-62",
+    "title": "Saving an order truncates the JSON file in place",
+    "location": "DMDL:1098-1113",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "AUDIT-PLAN-01",
+    "notes": "FileMode.Create plus a single WriteAsync, with no temp file or rename (DivinityModDataLoader.cs:1098-1113; sync twin 1080-1096). Ctrl+S reaches it (MainWindowViewModel.cs:2597-2633, 4969). A crash or full disk leaves an empty or partial file, and the order then drops silently from the list (DMDL:1115-1145). Unlikely but real.",
+    "fixCaveats": "Write to .tmp, Flush(true), then File.Replace (or File.Move with overwrite). Apply the same to the sync twin and probably ExportLoadOrderAsync."
+  },
+  {
+    "id": "HARV-63",
+    "title": "Duplicate mods with equal versions pick a random winner, and the loser is offered for deletion",
+    "location": "DMDL:787-806; MWVM:1695-1708 -> DeleteMods(..., true) :4359-4371",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "NEW",
+    "docRef": "none",
+    "notes": "ConcurrentBag plus a strict > on VersionInt makes the winner of a tie nondeterministic (DivinityModDataLoader.cs:773-806). Losers go to DeleteMods(...,true) with entries pre-selected (MainWindowViewModel.cs:1702-1708, 4359-4370; ModFileDeletionData.cs:13-20). Ties are common. The user must still confirm.",
+    "fixCaveats": "Tie-break on newest LastWriteTime, then ordinal path, and maybe don't pre-select on a tie. The dialog already shows the kept path. It lacks dates and sizes."
+  },
+  {
+    "id": "HARV-71",
+    "title": "Dropping into a column-sorted active list inserts at the view index, not the load-order index",
+    "location": "src/GUI/Views/HorizontalModLayout.xaml:115, .xaml.cs:755-769; src/GUI/ViewModels/ModListDropHandler.cs:150-175",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Confirmed",
+    "novelty": "CONTRADICTS_DOCS",
+    "docRef": "AUDIT-PLAN claim 23 and Stage 5 step 5 note",
+    "notes": "A header click sorts the ActiveMods view (.xaml.cs:752-769). gong remaps the index only when the counts differ (dl-gong/DropInfo.cs:55-80), so a sorted drop inserts at the view index (ModListDropHandler.cs:133, 150-162, 188-191). DragOver doesn't block it (:79-88), and the change is silent. This contradicts AUDIT-PLAN.",
+    "fixCaveats": "Map the target item to its ActiveMods index, including in the same-list adjustment, or block drops or turn off sorting while sorted by anything other than '#'. The original paths lacked the src/ prefix."
+  },
+  {
+    "id": "HARV-69",
+    "title": "`@desc` and `@file` filters can throw on mods with no description or no file path",
+    "location": "Core/Models/DivinityModFilterData.cs:23, 65, 70; Core/Models/DivinityBaseModData.cs:146-162",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Medium",
+    "status": "Refuted",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md section 3 (filter parsing 4178-4316); AUDIT-PLAN claim 22",
+    "notes": "Refuted. ValueContains lacks a null guard, but listed mods never have a null Description or FileName. ParseMetaFile falls back to \"\", and override paks set Description. Both loaders set FilePath (DivinityModDataLoader.cs:73-80, 211, 230, 364, 618, 641; DivinityModData.cs:383, 514-517). Base-game mods are kept out by CanAddToLoadOrder (MainWindowViewModel.cs:2142-2144, 5243). The voter suggested Low.",
+    "fixCaveats": "A null/empty guard is a cheap safeguard worth bundling with perf/filter work. It fixes no bug users can hit."
+  },
+  {
+    "id": "HARV-30",
+    "title": "Archive import flattens paks, so same-name paks overwrite each other (I5)",
+    "location": "MWVM:3424-3429",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Confirmed",
+    "novelty": "KNOWN",
+    "docRef": "plan Stage 3 I5; AUDIT-PLAN claim 13, AUDIT-PLAN-04",
+    "notes": "GetFileName plus File.Create truncates with no collision check (MainWindowViewModel.cs:3423-3429). Mods are added with no duplicate-path check (:3443-3453), so the first mod stays listed as a stale entry. Low because the manager's flat exports can't contain duplicate names. Only unusual third-party archives can.",
+    "fixCaveats": "Track the output names written during the import and warn on a repeat, or keep the subfolder path in the name. The uuid/version layout only helps archives the manager exported itself."
+  },
+  {
+    "id": "HARV-47",
+    "title": "The Script Extender updater writes DWrite.dll in place, so cancel or failure leaves it truncated (B12)",
+    "location": "MWVM:341-366; the game-running check is commented out at MWVM:5424-5425",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Plausible",
+    "novelty": "PARTLY_KNOWN",
+    "docRef": "CLAUDE.md section 3 and section 7; AUDIT-CLAUDE 9.2 / item 11",
+    "notes": "Corrected: the write is in place with no temp file (MainWindowViewModel.cs:362-363), but ZipArchive buffers the HTTP stream first (:352, :356), so a network drop can't truncate the file. Only a cancel or a decompression failure during a very short copy from memory can, and that shows an error (:396). Lines 5424-5425 are the modsettings watcher, not the updater.",
+    "fixCaveats": "The fix is cheap: write to .part, then File.Move with overwrite. A game-running check adds little, since a loaded DLL would block File.Create anyway."
+  },
+  {
+    "id": "HARV-54",
+    "title": "LastExported is shared by all profiles, so the startup \"restore\" offers another profile's order",
+    "location": "MWVM:2850-2858, 2291-2327",
+    "originalSeverity": "Medium",
+    "finalSeverity": "Low",
+    "status": "Plausible",
+    "novelty": "NEW",
+    "docRef": "none",
+    "notes": "Corrected: there is one LastExported.json with no profile key (MainWindowViewModel.cs:2852-2858), exported into SelectedProfile unchecked (:2283-2327, :2553). Loads force the Public profile first (:2425-2428; DivinityModDataLoader.cs:901-928), so cross-profile misuse needs a profile set with no profile named Public.",
+    "fixCaveats": "Store the profile UUID in the backup and compare it before prompting. Bundle with §6.4. Not Medium on its own."
+  }
+]
