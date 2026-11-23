@@ -339,6 +339,7 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 		MainProgressIsActive = true;
 
 		string dllDestination = Path.Combine(exeDir, DivinityApp.EXTENDER_UPDATER_FILE);
+		var progressDone = false;
 
 		RunInBackground(async (ctrl, t) =>
 		{
@@ -384,6 +385,7 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 
 			await Observable.Start(() =>
 			{
+				progressDone = true;
 				OnMainProgressComplete();
 				if (successes >= 3)
 				{
@@ -407,7 +409,11 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 			if (!isLoggingEnabled) await Observable.Start(() => Window.ToggleLogging(false), RxApp.MainThreadScheduler);
 
 			return Disposable.Empty;
-		}, () => OnMainProgressComplete());
+		}, () =>
+		{
+			//The overlay may belong to another job by now
+			if (!progressDone) OnMainProgressComplete();
+		});
 	}
 
 	private void OnToolboxOutput(object sender, DataReceivedEventArgs e)
@@ -1962,7 +1968,11 @@ Directory the zip will be extracted to:
 					}
 				});
 				return Disposable.Empty;
-			}, ResetBusyState);
+			}, () =>
+			{
+				IsRefreshing = false;
+				OnMainProgressComplete();
+			});
 		}
 	}
 
@@ -2591,7 +2601,7 @@ Directory the zip will be extracted to:
 
 	private void SaveLoadOrder(bool skipSaveConfirmation = false)
 	{
-		RxApp.MainThreadScheduler.ScheduleAsync(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation));
+		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
 	private async Task<bool> SaveLoadOrderAsync(bool skipSaveConfirmation = false)
@@ -2844,7 +2854,7 @@ Directory the zip will be extracted to:
 		{
 			await ExportLoadOrderAsync();
 			return Disposable.Empty;
-		}, ResetBusyState);
+		}, () => IsLoadingOrder = false);
 	}
 
 	private async Task BackupCurrentLoadOrderAsync()
@@ -3040,12 +3050,17 @@ Directory the zip will be extracted to:
 	/// </summary>
 	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task> work, Action onError = null, TimeSpan? dueTime = null)
 	{
-		return RxApp.TaskpoolScheduler.ScheduleAsyncSafe(work, ex =>
-		{
-			DivinityApp.Log($"Error in background work:\n{ex}");
-			ShowAlert($"Error: {ex.Message}", AlertType.Danger);
-			if (onError != null) RxApp.MainThreadScheduler.Schedule(onError);
-		}, dueTime);
+		return RxApp.TaskpoolScheduler.ScheduleAsyncSafe(work, ex => ReportBackgroundError(ex, onError), dueTime);
+	}
+
+	/// <summary>
+	/// Logs and shows an error from background work, then runs the job's cleanup (if any) on the UI thread.
+	/// </summary>
+	private void ReportBackgroundError(Exception ex, Action onError = null)
+	{
+		DivinityApp.Log($"Error in background work:\n{ex}");
+		ShowAlert($"Error: {ex.Message}", AlertType.Danger);
+		if (onError != null) RxApp.MainThreadScheduler.Schedule(onError);
 	}
 
 	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task<IDisposable>> work, Action onError = null, TimeSpan? dueTime = null)
