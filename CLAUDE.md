@@ -39,6 +39,8 @@ upstream  https://github.com/LaughingLeader/BG3ModManager.git
 the orphan `notes` branch (`9906953`: this file and the plan) and `kk/laughing-pascal-710otn` (the 2026-11-03 cloud review,
 `docs/review/`). Local `fork/main` (= `fc35358`) has not been pushed. List them with `git branch -r` and
 `git log --oneline master..origin/<branch>`. Everything below describes upstream's code as inherited unless it names a branch.
+Stage F fixes sit on local, unpushed `fix/*` branches cut from `master`, one commit each (five as of 2026-11-23); the
+plan's "Stage F progress" lists them and how each was checked.
 
 `perf/list-render` keepers: `b123aff`; `309b81e` + `396d7b2` (ship together; `309b81e` sits on TEMP logging from
 `789ec87` and conflicts on `master`, so a PR needs a hand-resolved version); `2858a23`, then `7fa8347` (it needs `2858a23`

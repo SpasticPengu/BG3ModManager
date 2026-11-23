@@ -5,8 +5,8 @@ The plan for the SpasticPengu fork of BG3 Mod Manager. Work that could also help
 without dragging fork-only changes along with it.
 
 - **Based on:** the original project's `master` branch (a Windows app built with WPF on .NET 8)
-- **Fork work so far:** 15 commits on 2 branches; `master` itself is untouched
-- **Status:** smoother scrolling (6.1) is paused; the code review is folded in
+- **Fork work so far:** 20 commits on 7 branches; `master` itself is untouched
+- **Status:** Stage F under way (5 of 11 fixes done, not pushed); smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -28,6 +28,14 @@ down keep the technical detail for whoever does the work.
   23 November. Most of it holds up, and it found about 20 bugs the plan didn't know about. Some of them
   can quietly lose a load order, crash the app or reset settings. They are collected in
   [Stage F](#stageF).
+- **Stage F is under way: 5 of its 11 fixes are done** (23 November), each on its own branch and checked by
+  a small test program, not yet in the real app. They fix: the window position and the admin-warning choice
+  being forgotten; Save or Export crashing when mods depend on each other in a loop; Save deleting the mods
+  of an order that aren't installed; errors in background work leaving the app stuck on "Loading...";
+  and a single-letter shortcut crashing every launch. Two extra problems turned up and were fixed on the way:
+  Export left out a dependency's own dependencies, and a restored window could land on an unplugged monitor.
+  Your own data: none of your mods loop, 13 of your 16 saved orders hold mods that aren't installed (a Save
+  would have deleted them), and 3 orders were missing one dependency each.
 - **Everything else hasn't started.** The review sketched designs for most stages, and a new
   [Stage L](#stageL) for the mod library you asked for: keep every version of each mod, and let each
   load order use its own versions.
@@ -39,7 +47,9 @@ down keep the technical detail for whoever does the work.
 
 1. **Fix the bugs that lose data or crash the app** ([Stage F](#stageF)). Each fix is small and gets its
    own branch, so it can be offered to the original author too. *Decided 23 November: this goes first,
-   in the order of the Stage F checklist below.*
+   in the order of the Stage F checklist below.* **Next up: fix 6, Export to game** (`fix/export-to-game`),
+   in a new chat; start at [Stage F progress](#stageFprogress), which says how the first five were done
+   and checked.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -56,6 +66,9 @@ down keep the technical detail for whoever does the work.
   donation links (Stage 1), whether fuzzy search reorders the active list (Stage 5), and the open
   questions on overrides and categories (Stage 6).
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
+- **Stage F:** may I start the app once to confirm the finished fixes? It opens a window for a minute or
+  two; your mod list file is backed up first. And: offer each fix to the original author as it is done,
+  or all of Stage F together at the end?
 
 ### Housekeeping
 
@@ -92,8 +105,9 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
   were missing one such dependency each
 - [x] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`, `bb07d2bf`). 13 of your 16
   saved orders hold 1 to 16 such mods each; a Save would have deleted them
-- [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
-- [ ] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`)
+- [x] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`, `7f19c08c`)
+- [x] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`, `c8c21eed`)
+- [ ] One real launch of the app to confirm the five fixes above (needs your OK; see [Stage F progress](#stageFprogress))
 - [ ] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`)
 - [ ] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`)
 - [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
@@ -462,6 +476,36 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 | `fix/updater-errors` | A failed update check says "up to date"; cancelling or failing the update download closes the app. CLAIM-16, HARV-01, HARV-02. | `AppUpdateWindowViewModel.cs`; `TryRunUpdate` calls `Environment.Exit(0)` whatever happened. | Report the failure; exit only after a successful download. |
 | `fix/path-containment` | **Security, needs a crafted mod.** A compressed pak import (`.bz2/.xz/.zst`) names its output from the mod's own `meta.lsx` Folder, so it can truncate or replace `.pak` files outside Mods (SVC-01). Extract Selected Mods writes pak entry names with no containment check, so `..` escapes the chosen folder (VM2-06). | `MainWindowViewModel.cs:3294-3301`; extraction in `External/lslib/LSLib/LS/PackageCommon.cs:162` (submodule). | `Path.GetFileName` on the derived name; a containment check before each extracted write (the lslib half is a submodule PR). |
 | `fix/duplicate-dialog-larian` | If a mod reuses a Larian module's UUID, the startup duplicate dialog can tick the game's own `Game.pak` or `Gustav.pak` for deletion; confirming recycles it where the folder is writable (usually Steam, usually not GOG under Program Files). LOAD-01: offering Data-folder copies is intended, offering Larian paks is the bug. | `MainWindowViewModel.cs:1694-1709`. | Exclude Larian and multi-module Data paks from that rule. |
+
+<a id="stageFprogress"></a>
+
+#### Stage F progress (23 November)
+
+**In short:** the first five fixes are done and checked outside the app. The next chat continues with
+`fix/export-to-game`.
+
+| Branch | Commit | What changed | Checked by |
+|---|---|---|---|
+| `fix/settings-restore` | `f4d3d737` | `Window`/`Confirmations` copied in place after `SetFrom` (`WindowSettings.SetFrom`). Also `ApplyWindowPosition` keeps negative coordinates when the title bar is on a connected screen (else default position), and `UpdateWindowSettings` skips a minimized window (-32000). | 13 PASS: master loses both values, the fix keeps them across two launches, same instances, null objects in the file; the on-screen test. |
+| `fix/dependency-cycle` | `9f854767` | `GetDependencyMods` marks a dependency before recursing. **New finding:** master also dropped dependencies of dependencies (every recursive result was already in `addedMods`, so the caller never added it), losing even active mods for an order M, D, E with M→D→E. Adventure added once. | 13 cases (master: 5 stack overflows, 2 drops). Scan of 1,132 installed mods: no self or loop dependencies; 45 mods have depth-2 dependencies; over the 16 saved orders the fix only adds 1 missing dependency in 3 orders. |
+| `fix/order-keep-missing` | `bb07d2bf` | `LoadModOrder` sets `entry.Missing`; `DivinityLoadOrder.UpdateFrom` (one linear pass) puts Missing entries back after the entry they followed. Save As still drops missing mods on purpose; Clear Missing Mods still removes them; Export's missing-mods notice now lists them. | 13 cases + 1,000-entry timing (0.4 ms; a first O(n²) draft took 19 ms). 13 of 16 saved orders hold 1 to 16 missing mods, all kept in order. |
+| `fix/background-errors` | `7f19c08c` | `ReactiveExtensions.ScheduleAsyncSafe` + `RunInBackground` for all 15 `ScheduleAsync` sites: log, `ShowAlert`, then per-site cleanup (`ResetBusyState` for refreshes, ImportMods and Export to game; `OnMainProgressComplete` for zip, extract and the SE download). | 7 PASS on `RxApp.TaskpoolScheduler`: master's error reaches no handler (only `UnobservedTaskException` after a forced GC); the fix reports errors before and after an await, ignores cancellation, keeps the 2 s delay and disposal. |
+| `fix/hotkey-validation` | `c8c21eed` | `Hotkey.IsValidGesture` (asks `KeyGesture` itself); the editor refuses and explains; `LoadKeybindings` skips and names saved invalid ones. | 17 PASS: the startup `KeyBinding` throws for a plain L; `IsValidGesture` agrees with it on 16 pairs. |
+
+**How the checks run.** A throwaway console program references the built `bin\Debug` DLLs and logs PASS/FAIL;
+one `<Name>Check.cs` per branch, built alone because each branch only has its own fix. It is kept outside the
+repo in the session notes folder, `...\side-session-notes\local_16579313-3951-4f39-bb69-06578dd6828c\stageF-harness\`
+(`run-check.ps1 <Name>` builds and runs it), with `splice.py` for byte-exact edits of mixed-ending files
+(see `tasks/lessons.md`) and `sync-notes.sh` for the `notes` branch. `modsettings.lsx` was backed up to
+`...\backups\2026-11-23\` in the same folder (hash-checked).
+
+**Not yet done for these five:** a launch of the real app. Worth checking there: the window comes back
+where it was (fix 1); a `keybindings.json` holding a plain `L` starts with a warning (fix 5); loading an
+order with a missing mod and saving keeps it (fix 3). Needs the owner's OK, because it opens a window.
+
+**Facts for the next fixes.** The owner's real install is `Documents\BG3 Modding\BG3 Mod Manager`
+(1.0.12.9, 16 saved orders, Save Window Location on, auto-add dependencies on). The active `Public` order
+is now 26 entries (was 935 in September). Reading the 1,132 paks with the app's loader takes 66 to 79 s cold.
 
 #### Lower priority, same family (confirmed)
 
