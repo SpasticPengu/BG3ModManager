@@ -36,11 +36,18 @@ public partial class AppUpdateWindowViewModel : ReactiveObject
 		{
 			MainWindow.Self.ViewModel.Settings.LastUpdateCheck = DateTimeOffset.Now.ToUnixTimeSeconds();
 			MainWindow.Self.ViewModel.SaveSettings();
+			// True only once the installer has started (it waits for this process to exit). False when the download was
+			// cancelled or failed, and the app must keep running then.
 			if (AutoUpdater.DownloadUpdate(_updateArgs))
 			{
+				// A normal shutdown, not Environment.Exit, so the window's close handlers still run (window position, settings.json)
 				System.Windows.Application.Current.Shutdown();
 			}
-			Environment.Exit(0);
+			else
+			{
+				// The update window stays open, so the update can be tried again
+				MainWindow.Self.ViewModel.ShowAlert("The update was cancelled or could not be downloaded", AlertType.Warning, 30);
+			}
 		}
 		catch (Exception ex)
 		{
@@ -55,44 +62,51 @@ public partial class AppUpdateWindowViewModel : ReactiveObject
 	{
 		try
 		{
+			// AutoUpdater raises CheckForUpdateEvent with only Error set when the update feed could not be downloaded or read
+			if (args.Error != null)
+			{
+				DivinityApp.Log($"Error checking for update:\n{args.Error}");
+				if (_showAlert) MainWindow.Self.ViewModel.ShowAlert($"Failed to check for updates: {args.Error.Message}", AlertType.Danger, 60);
+				return;
+			}
+
 			var markdownText = await WebHelper.DownloadUrlAsStringAsync(DivinityApp.URL_CHANGELOG_RAW, CancellationToken.None);
 			if (!String.IsNullOrEmpty(markdownText))
 			{
 				markdownText = RemoveEmptyLinesPattern.Replace(markdownText, string.Empty);
-				await Observable.Start(() =>
+			}
+
+			// The update window binds these properties, so set them on the UI thread
+			await Observable.Start(() =>
+			{
+				if (!String.IsNullOrEmpty(markdownText)) UpdateChangelogView = markdownText;
+
+				_updateArgs = args;
+
+				if (args.IsUpdateAvailable)
 				{
-					UpdateChangelogView = markdownText;
-				}, RxApp.MainThreadScheduler);
-			}
+					UpdateDescription = $"{AppTitle} {args.CurrentVersion} is now available.\nYou have version {AppVersion} installed.";
 
-			_updateArgs = args;
+					CanConfirm = true;
+					SkipButtonText = "Skip";
+					CanSkip = true;
+					UpdateVersion = Version.Parse(args.CurrentVersion);
+					if (_showAlert) MainWindow.Self.ViewModel.ShowAlert("Update found!", AlertType.Success, 20);
+				}
+				else
+				{
+					UpdateDescription = $"{AppTitle} is up-to-date.\nYou have version {AppVersion} installed.";
+					CanConfirm = false;
+					CanSkip = true;
+					SkipButtonText = "Close";
+					if (_showAlert) MainWindow.Self.ViewModel.ShowAlert("Already up-to-date", AlertType.Info, 20);
+				}
 
-			if (args.IsUpdateAvailable)
-			{
-				UpdateDescription = $"{AppTitle} {args.CurrentVersion} is now available.\nYou have version {AppVersion} installed.";
-
-				CanConfirm = true;
-				SkipButtonText = "Skip";
-				CanSkip = true;
-				UpdateVersion = Version.Parse(args.CurrentVersion);
-				if (_showAlert) MainWindow.Self.ViewModel.ShowAlert("Update found!", AlertType.Success, 20);
-			}
-			else
-			{
-				UpdateDescription = $"{AppTitle} is up-to-date.\nYou have version {AppVersion} installed.";
-				CanConfirm = false;
-				CanSkip = true;
-				SkipButtonText = "Close";
-				if (_showAlert) MainWindow.Self.ViewModel.ShowAlert("Already up-to-date", AlertType.Info, 20);
-			}
-
-			if (args.IsUpdateAvailable || _showAlert)
-			{
-				RxApp.MainThreadScheduler.Schedule(() =>
+				if (args.IsUpdateAvailable || _showAlert)
 				{
 					IsVisible = true;
-				});
-			}
+				}
+			}, RxApp.MainThreadScheduler);
 		}
 		catch(Exception ex)
 		{
