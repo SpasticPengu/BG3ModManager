@@ -40,8 +40,10 @@ the orphan `notes` branch (`9906953`: this file and the plan) and `kk/laughing-p
 `docs/review/`). Local `fork/main` (= `fc35358`) has not been pushed. List them with `git branch -r` and
 `git log --oneline master..origin/<branch>`. Everything below describes upstream's code as inherited unless it names a branch.
 Stage F fixes sit on local, unpushed `fix/*` branches cut from `master`: all eleven as of 2026-11-23, one commit each
-except fixes 3, 4 and 5 (a review follow-up each). The plan's "Stage F progress" lists them, how each was checked, and
-the one merge conflict among them (`fix/background-errors` + `fix/export-to-game`).
+except fixes 3, 4 and 5 (a review follow-up each). They are combined on local `integrate/stage-f` (`master` + eleven
+`--no-ff` merges + 6 follow-up commits, `76d0b7f0`), which alone carries the fixes for problems found when they meet;
+it is the unit to merge into `fork/main` or offer upstream. The plan's "Stage F progress" lists every commit, how it
+was checked (201 harness checks, two real-app runs) and how to drive the app in a test.
 
 `perf/list-render` keepers: `b123aff`; `309b81e` + `396d7b2` (ship together; `309b81e` sits on TEMP logging from
 `789ec87` and conflicts on `master`, so a PR needs a hand-resolved version); `2858a23`, then `7fa8347` (it needs `2858a23`

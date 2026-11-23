@@ -5,9 +5,11 @@ The plan for the SpasticPengu fork of BG3 Mod Manager. Work that could also help
 without dragging fork-only changes along with it.
 
 - **Based on:** the original project's `master` branch (a Windows app built with WPF on .NET 8)
-- **Fork work so far:** 29 commits on 13 branches; `master` itself is untouched
-- **Status:** Stage F's 11 fixes are all done (not pushed); fixes 6 to 11 still need one real run of the app;
-  smoother scrolling (6.1) is paused
+- **Fork work so far:** 48 commits (11 of them merges) on 15 branches, plus this plan on `notes`; `master` itself is
+  untouched
+- **Status:** Stage F is finished and checked: the 11 fixes are combined on `integrate/stage-f` (local, not pushed),
+  reviewed, and pass 201 checks and a real run of the app; merging it into `fork/main` waits for your OK.
+  Smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -39,7 +41,7 @@ down keep the technical detail for whoever does the work.
   unplugged monitor. Your own data: none of your mods loop, 13 of your 16 saved orders hold mods that aren't
   installed (a Save would have deleted them), and 3 orders were missing one dependency each.
 - **Fixes 6 to 11** were each checked by a test program and by an independent review whose findings are
-  fixed; none has been tried in the real app yet. What they fix:
+  fixed, and on 23 November in the real app too (see the next point). What they fix:
   - Export to game now keeps a copy of the game's previous mod list, never jumps to another saved order,
     never locks the app, and refuses to write a list the game couldn't read. Your own `modsettings.lsx.bak`
     (934 mods, 19 September) is safe: the app's new backup has its own name, `modsettings.lsx.bg3mm.bak`.
@@ -55,6 +57,20 @@ down keep the technical detail for whoever does the work.
     the bundled LSLib library is written up as a separate patch.
   - The startup "duplicate mods" dialog never offers the game's own files for deletion. Your
     `PartyLimitBegone.pak` holds copies of 9 game modules; renamed, it would have offered `Gustav.pak`.
+- **All 11 fixes now work together** (23 November). They are combined on one branch, `integrate/stage-f`; only
+  one small clash had to be settled by hand. A second independent review then looked only for problems that
+  appear when the fixes meet: it found 15 distinct small problems (none serious). 14 are fixed; 1 was left as it
+  is because it behaves exactly like the original app. A last review of those fixes found 3 more, also fixed.
+  Examples: Export could
+  reload the list halfway through and show the "missing mods" box twice; the "restore last order?" prompt
+  could fill your list with nameless entries; Save could hide the "left out a mod" warning behind a success
+  message. All 201 checks pass on the combined build.
+- **The real app was tried** with every fix in it, in two short automated runs against a throwaway copy of your
+  game-profile folder (your real mod list, saved orders and game files were checked before and after: unchanged).
+  Everything worked: the restore prompt, the duplicate-mods dialog, Export with its backup and its guard against
+  broken mod IDs, Save keeping a mod that isn't installed, the update-check message, and extracting a booby-trapped
+  mod safely. 84 of 85 checks passed; the one failure was the test script's own mistake, and the app's log shows
+  the right thing happened.
 - **Everything else hasn't started.** The review sketched designs for most stages, and a new
   [Stage L](#stageL) for the mod library you asked for: keep every version of each mod, and let each
   load order use its own versions.
@@ -64,10 +80,9 @@ down keep the technical detail for whoever does the work.
 
 ### What's next
 
-1. **Finish Stage F** ([Stage F](#stageF)). All 11 fixes are written and checked outside the app. Left:
-   one real run of the app for fixes 6 to 11 (needs your OK; the steps are in
-   [Verification, Stage F](#verify)), then putting the branches together (one small known clash, see
-   [Stage F progress](#stageFprogress)) and your answer on offering Stage F to the original author.
+1. **Close Stage F** ([Stage F progress](#stageFprogress)). The work is done and checked. Left: your OK to merge
+   `integrate/stage-f` into `fork/main` (the fork's own line), and your answer on offering Stage F to the
+   original author.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -85,10 +100,9 @@ down keep the technical detail for whoever does the work.
   questions on overrides and categories (Stage 6).
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
 - **Stage F upstream:** *decided 23 November:* no fix is offered on its own. All of Stage F may be offered
-  together once it is finished, and even that is still only a maybe: ask again at the end of Stage F.
-  **The code is now finished, so this question is open again.**
-- **Stage F real-app check of fixes 6 to 11:** may the app be started once more to try them? It opens a
-  window; your mod list file and saved orders are backed up first.
+  together once it is finished, and even that is still only a maybe. On 23 November you chose to decide after
+  the real-app run, which has now passed: **open again.**
+- **Merge Stage F into `fork/main`:** `integrate/stage-f` is checked and ready; merging needs your OK.
 
 ### Housekeeping
 
@@ -139,8 +153,12 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
 - [x] A booby-trapped mod can't write outside the Mods folder (`fix/path-containment`, `77d1a56a`). Also closed: the same
   hole in zip imports. The LSLib half is a separate patch (see [Stage F progress](#stageFprogress))
 - [x] Never offer the game's own files for deletion (`fix/duplicate-dialog-larian`, `1fd0b432`)
-- [ ] One real launch of the app to confirm fixes 6 to 11 (needs your OK; steps in [Verification](#verify))
-- [ ] Put the 11 branches together (one known clash, between fixes 4 and 6) and decide about offering them upstream
+- [x] Put the 11 branches together (`integrate/stage-f`; one clash, between fixes 4 and 6), review the combination
+  and fix what it found (one integration commit, then 5 review-fix commits), 201 checks pass
+- [x] Real runs of the app with all 11 fixes (23 November, two automated runs on a throwaway profile folder: 84 of 85
+  checks pass, the 85th was the test script's mistake; your real files unchanged)
+- [ ] Merge `integrate/stage-f` into `fork/main` (needs your OK)
+- [ ] Decide about offering Stage F upstream
 
 **Stage 2: exporting a zip**
 - [ ] Fix the export bugs as revised in Stage 2 (`fix/zip-export-corruption`)
@@ -509,8 +527,8 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 
 #### Stage F progress (23 November)
 
-**In short:** all eleven fixes are done; the first five are also checked in the real app, fixes 6 to 11 still need
-that one run.
+**In short:** all eleven fixes are done, combined on `integrate/stage-f`, reviewed together, and checked in the real
+app (23 November). Left: your OK to merge it into `fork/main`, and the upstream decision.
 
 | Branch | Commit | What changed | Checked by |
 |---|---|---|---|
@@ -526,14 +544,69 @@ that one run.
 | `fix/path-containment` | `77d1a56a` | `DivinityFileUtils.GetContainedPath(root, name)`: the full path `Path.Join(root, name)` resolves to, or null outside root (ordinal prefix test, so a case-only difference counts as outside). Every pak extraction goes through `UncompressPackageContained`, which gives LSLib a filter that skips and logs escaping entries and returns false. The compressed-pak import (SVC-01) and the zip/7z import (found by the review: `Path.GetFileName("x/D:evil.pak")` is drive-relative) pass names through `MakeSafeFilename` + `GetContainedPath`; the editor-mod archive export names its temp pak with `MakeSafeFilename`. The LSLib patch is written up in `...\side-session-notes\local_e41f79c8-ab41-48e5-b759-9212d1b0b757\lslib-uncompress-containment.md`. | 25 PASS: `GetContainedPath` on 13 names; a pak crafted with LSLib's own writer puts 2 files outside the folder with master's call and none with the fix, which still extracts the normal file, reports failure and honours a caller's filter; for crafted Folder values and zip entry names master's path leaves Mods and the fix's stays in it; IL scans show both imports call both helpers. Review: 1 minor (the zip sibling) and 3 nits, fixed except one: the editor export still reads `Mods/<Folder>` with an unchecked Folder (a read of the user's own loose project; follow-up). |
 | `fix/duplicate-dialog-larian` | `1fd0b432` | `DivinityModDataLoader.CanDeleteDataFolderDuplicate(baseMod, baseMods)`: false for an editor project, a Larian module (`IsLarianMod`, or a UUID in IgnoredMods, since IsLarianMod is only an Author test and Engine's Author is "LS"), a module with no file, or a Data pak other loaded modules also come from. The startup duplicate rule (`MainWindowViewModel.cs:1695-1702`) offers only base mods that pass and logs the rest. A user's single-module pak in Data is still offered (e218226c). | 6 PASS on the owner's real GOG Data folder read with `LoadBuiltinModsAsync` (22 base modules, 7 of them the owner's loose projects): master offers the game pak for all 15 game modules when a Mods pak reuses their UUID (`PartyLimitBegone.pak` holds 9 such metas, its first is Gustav's); the fix offers none, still offers a single-module user pak, and refuses a multi-module pak, a Larian UUID with a non-Larian Author and a module with no file. Review: ship with nits (the log wording, done). |
 
-**Putting the branches together.** A test merge of every pair of the 11 fix branches (`git merge-tree`, no
-checkout) finds 1 conflict in 55 pairs: `fix/background-errors` + `fix/export-to-game`, both rewriting the one
-scheduling line of `ExportLoadOrder`. Resolve it as
+**Putting the branches together (done 23 November, local branch `integrate/stage-f`).** `master` plus eleven
+`--no-ff` merges in checklist order (`e30ee9f6` ... `ce6c70ea`), then `243a08e4`. A test merge of every pair had
+predicted the one conflict: `fix/background-errors` + `fix/export-to-game`, both rewriting the scheduling line of
+`ExportLoadOrder`; resolved in merge `3c23e9e9` as
 `RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (ctrl, t) => await ExportLoadOrderAsync(), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));`
-(the UI thread from fix 6, the error report from fix 4). Things that merge cleanly but should be looked at together:
-with fixes 3 and 8 both in, fix 3's `exportedEntries` (what Current and the profile mirror after an export)
-should also drop mods fix 8 leaves out (`Guid.TryParse` on the entry UUID); fix 6's read-back count already
-counts only what fix 8 wrote.
+(the UI thread from fix 6, the error report from fix 4). `243a08e4` adds `IsWrittenOnExport` (not Missing and
+`Guid.TryParse`): with fixes 3 and 8 both in, an export leaves out non-GUID IDs, so Current, the profile's ActiveMods
+and LastExported now mirror only what was written (fix 6's read-back count already counted only what fix 8 wrote).
+The combined Debug build has no new warnings (all 44 predate the fork). Every check re-run on it: 177 PASS, 0 FAIL.
+Fix 6 runs as `ExportToGameCombined` (v1 harness): `ExportToGame` itself fails 4 checks there by design, since its
+backup test used IDs like "X" (no longer backed up) and it expected a path ID to block the export (fix 8 now leaves
+it out with a log line); the variant uses GUIDs, expects that, and adds 3 checks for `IsWrittenOnExport`. The v2
+harness (fixes 1-5) must run under `pwsh`: Windows PowerShell 5.1 mangles `-p:BinDir=...\` (a path with a space and
+a trailing backslash) and every reference fails to resolve.
+
+**Review of the combination (23 November).** A workflow of 4 read-only reviewers (one per area where fixes meet:
+export/save, startup/restore, import/extract/updater, merge fidelity and threading), each followed by a skeptic, on
+`243a08e4`: 22 findings, 18 confirmed, 4 refuted; 15 distinct problems, all low. Fixed on `integrate/stage-f` by a
+fixer agent, reviewed again, then fixed again (the reviewer found 4 more: Current outside the export snapshot, an
+alert pointing at a log that is off by default, a broken pak reported as extracted, and missing checks):
+
+| Commit | What changed |
+|---|---|
+| `c5bfcc95` | Export: one snapshot after `UpdateOrderFromActiveMods` (order, profile, campaign, written entries) used after every await (exp5); exporting LastExported itself no longer rewrites the order on screen (exp4, mer4); `_loadedModOrder`: a selection that only moves to a new index is not reloaded, so the first export no longer reloads the order and shows the missing-mods box twice (exp3, mer1); a throw from `UpdateLauncherPreferencesAsync` after the write is logged, not a failure (exp6); the read-back is strict again, `LoadModSettingsFileAsync(path, strict: true)` skips fix 8's XDocument fallback (exp1, mer2); Save of Current no longer covers Export's alert (exp2) |
+| `3b87bcd0` | Restore prompt: the profile and Current mirror what is written (`BuildOutputList` + `CanWriteToModSettings`, auto-added dependencies included) (sta1); an unreadable file says so instead of "reset externally" (mer3, sta2); `RunInBackground(CheckForEmptyOrderAsync, () => IsLoadingOrder = false)` (sta3); `LoadProfilesAsync` returns `[]`, not null (sta4) |
+| `e71a0ffb` | The close-time window save skips the screen lookup once the handle is gone (imp1); the editor-mod zip export deletes its temp folder recursively in a `finally` (imp2); Extract Selected Mods names the paks and entries it skipped (imp3); a cancelled or failed update download also shows a message box over the update window (imp5) |
+| `6b47e705` | The export snapshot also holds this profile's Current, so a profile switch mid-export cannot fill the other profile's Current |
+| `76d0b7f0` | With a `skipped` list, `ExtractPackageAsync` rethrows extraction errors, so a pak that failed is reported as an error, not as "extracted but skipped"; the alert names up to 3 skipped entries per pak |
+
+Left on purpose: exp7/mer5 (the launcher-preferences branch tests `!Missing`, the same outcome as master's
+`Count > 0`). Behaviour changes to know: the restore mirrors auto-added dependencies, while Export still mirrors
+only the order's own entries (as master); after Save As, `_loadedModOrder` holds the temporary order (unchanged
+behaviour). The `fix/*` branches stop at their reviewed state; these follow-ups exist only on `integrate/stage-f`,
+which is the unit to merge or to offer upstream. Checks: `ReviewFixesCheck.cs` (24, v1 harness, IL scans plus real
+calls); every check on `76d0b7f0`: 201 PASS, 0 FAIL (`run-all-checks.ps1 -Out <log> ReviewFixes` under `pwsh`, in this
+session's scratchpad); build 0 errors, the same 44 warnings.
+
+**Real app run 2 (23 November, with the owner's OK).** `stageF-harness-v2\stagef-apprun2.ps1 -Launch A|B` (Windows
+PowerShell 5.1, UI Automation; one dialog needed a `WM_COMMAND` message, see below) on two copies of the `76d0b7f0`
+Debug build, each with its own `Data\settings.json` whose `DocumentsFolderPathOverride` names a scratch
+`Larian Studios\Baldur's Gate 3` (fake `Mods` and `PlayerProfiles\Public`). Test data: `AppRunSetupCheck.cs` (v2
+harness), paks written with LSLib's own writer. Results and app logs: `...\local_16579313-...\apprun2-results-2026-11-23\`.
+- **A** (restore prompt, duplicate dialog, fixes 1 and 5): 39 of 40 PASS. Fix 11: two Mods paks reusing GustavX's and
+  Gustav's UUIDs at a lower version, no game pak offered, no overlay. Fix 7: Yes wrote GustavX + A, B, C, the old
+  file became `.bg3mm.bak`, the saved orders were unchanged on disk and in memory. The one FAIL was the script's
+  expectation: LastExported matched the list on screen, so the app logged "orders match" instead of reloading
+  (criterion fixed since).
+- **B** (fixes 3, 6, 8, 9, 10): 45 of 45 PASS. The bad modsettings row skipped at startup; Extract Selected Mods
+  skipped `../escape1.txt` and `Mods/../../../escape2.txt` with the new warning, the normal files extracted; the
+  update check failed through a dead proxy and said so; Save kept the not-installed mod; Export left the path-ID
+  override out with a warning, kept `.bg3mm.bak`, left the user's `.bak` alone, kept the selection, put LastExported
+  second holding A and B, did not reload the order; Current then held A and B.
+- Both: 17 checks on the owner's real files (modsettings.lsx and its three `.bak` files, profile files, launcher
+  preferences, the game's Script Extender files and `DWrite.dll`, the Data paks, `BG3ScriptExtender`, the real BG3MM
+  install's Orders) unchanged before and after.
+
+How to drive this app (cost 6 relaunches to learn): delete `Tools\Toolbox.exe` from the copy (it runs the real Script
+Extender updater after every refresh) and seed `InsanityCheck: true`, `DeleteModCrashSanityCheck: false`; set
+`HTTPS_PROXY`/`HTTP_PROXY` to a dead port for the child (this shell's own proxy would leak in); UI Automation shows an
+owned dialog's content (the Xceed restore prompt, the shell folder picker `#32770`) **inside the main window's tree**,
+not as a top-level window; an order item's UIA name is its class name, so read its Text child; a Win32 dialog button
+ignores UIA Invoke (BM_CLICK) while the dialog is not the active window, so post `WM_COMMAND` with the button id
+(1 OK, 2 Cancel); in PowerShell functions use `Write-Host`, since `Write-Output` lands in the return value.
 
 **Follow-ups found on the way** (none blocks Stage F):
 - HARV-54: one LastExported for every profile. Needs a profile set without "Public"; the fix touches
@@ -1124,6 +1197,9 @@ Select several orders; produce one zip containing each order's JSON plus the uni
 - A Mods pak whose meta reuses `Gustav`'s UUID: startup offers no game pak for deletion.
 - Restart with Save Window Location on: the window comes back where it was.
 - Each check ships as an instrumented dev check that logs PASS/FAIL, per the standing rule.
+- Done 23 November on the combined build: every item above except the symbolic-link write, the cancelled update
+  download (needs a feed that offers an update) and the second-monitor close (see [Stage F progress](#stageFprogress),
+  "Real app run 2"; the self-dependency and hotkey items ran in the first app run and the harness).
 
 ### Stage 2 — export
 
