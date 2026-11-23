@@ -12,6 +12,16 @@ as the roadmap, although HTML plans were retired on 2026-11-06 (global workflow 
 checklist at the top. HTML is only for a mock-up or diagram that the plan links to. If any file still names
 an HTML plan, convert or fix the reference; never extend the HTML.
 
+## 2026-11-23: the Edit tool rewrites a mixed-line-ending file whole
+
+**What happened:** on `fix/dependency-cycle` one small Edit to `DivinityModDataLoader.cs` turned into a
+1,072-line diff. The file is stored with mixed line endings (`git ls-files --eol` shows `i/mixed`), and the
+Edit tool normalised every line. An upstream PR like that is unreviewable.
+
+**Rule:** before editing a file, check `git ls-files --eol <file>`. For an `i/mixed` file (11 on `master`,
+listed by `git ls-files --eol | grep i/mixed`), splice the change byte-exactly with a script that keeps the
+surrounding line endings, and always read `git diff --stat` before building or committing.
+
 ## 2026-11-23: plain language for the owner
 
 **What happened:** my status reports were full of developer jargon (awaiters, `SetFrom`, lists of

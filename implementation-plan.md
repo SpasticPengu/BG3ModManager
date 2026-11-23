@@ -87,7 +87,9 @@ The first fix is the smallest and is sure to affect you, so it also proves the r
 check, commit) before the riskier ones. Crashes and lost load orders come next.
 - [x] Remember window size, position and the admin-warning choice (`fix/settings-restore`, `f4d3d737`; checked
   without opening the app, one real launch still to do)
-- [ ] Save or Export crashes when mods depend on each other in a loop (`fix/dependency-cycle`)
+- [x] Save or Export crashes when mods depend on each other in a loop (`fix/dependency-cycle`, `9f854767`). Also
+  fixed: Export silently left out a dependency's own dependencies. None of your mods loop; 3 of your saved orders
+  were missing one such dependency each
 - [ ] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`)
 - [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
 - [ ] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`)
