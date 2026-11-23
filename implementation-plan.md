@@ -85,7 +85,8 @@ down keep the technical detail for whoever does the work.
 
 The first fix is the smallest and is sure to affect you, so it also proves the routine (new branch, build,
 check, commit) before the riskier ones. Crashes and lost load orders come next.
-- [ ] Remember window size, position and the admin-warning choice (`fix/settings-restore`)
+- [x] Remember window size, position and the admin-warning choice (`fix/settings-restore`, `f4d3d737`; checked
+  without opening the app, one real launch still to do)
 - [ ] Save or Export crashes when mods depend on each other in a loop (`fix/dependency-cycle`)
 - [ ] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`)
 - [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
