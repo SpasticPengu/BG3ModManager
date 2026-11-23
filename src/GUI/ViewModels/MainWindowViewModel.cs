@@ -1706,7 +1706,14 @@ Directory the zip will be extracted to:
 			{
 				if (baseModsDict.TryGetValue(pakMod.UUID, out var baseMod) && !baseMod.IsEditorMod)
 				{
-					modLoadingResults.Duplicates.Add(baseMod);
+					if (DivinityModDataLoader.CanDeleteDataFolderDuplicate(baseMod, baseMods))
+					{
+						modLoadingResults.Duplicates.Add(baseMod);
+					}
+					else
+					{
+						DivinityApp.Log($"Mod pak '{pakMod.FilePath}' has the UUID of {baseMod.Name} [{baseMod.UUID}] from '{baseMod.FilePath}', a game module or a pak holding several modules, so that file is not offered for deletion.");
+					}
 				}
 			}
 			var dupeCount = modLoadingResults.Duplicates.Count;
