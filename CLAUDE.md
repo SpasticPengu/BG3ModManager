@@ -37,12 +37,12 @@ upstream  https://github.com/LaughingLeader/BG3ModManager.git
 `origin` (as of 2026-11-23): `fix/publish-prebuild-quoting` (`f6633a8`, `5f8a80a9`), `perf/list-render` (13 commits on
 `fc35358`: five fixes, seven `TEMP:` instrumentation commits and `e38c87b`, which only re-encodes the TEMP `PerfProbe.cs`),
 the orphan `notes` branch (`9906953`: this file and the plan) and `kk/laughing-pascal-710otn` (the 2026-11-03 cloud review,
-`docs/review/`). Local `fork/main` (= `fc35358`) has not been pushed. List them with `git branch -r` and
+`docs/review/`). Local `fork/main` (`75eddc74`: `fc35358` plus the Stage F merge) has not been pushed. List them with `git branch -r` and
 `git log --oneline master..origin/<branch>`. Everything below describes upstream's code as inherited unless it names a branch.
 Stage F fixes sit on local, unpushed `fix/*` branches cut from `master`: all eleven as of 2026-11-23, one commit each
 except fixes 3, 4 and 5 (a review follow-up each). They are combined on local `integrate/stage-f` (`master` + eleven
 `--no-ff` merges + 6 follow-up commits, `76d0b7f0`), which alone carries the fixes for problems found when they meet;
-it is the unit to merge into `fork/main` or offer upstream. The plan's "Stage F progress" lists every commit, how it
+it is the unit to offer upstream, and local `fork/main` merged it on 2026-11-23 (`75eddc74`, not pushed). The plan's "Stage F progress" lists every commit, how it
 was checked (201 harness checks, two real-app runs) and how to drive the app in a test.
 
 `perf/list-render` keepers: `b123aff`; `309b81e` + `396d7b2` (ship together; `309b81e` sits on TEMP logging from

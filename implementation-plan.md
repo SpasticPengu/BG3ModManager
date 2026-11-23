@@ -7,9 +7,8 @@ without dragging fork-only changes along with it.
 - **Based on:** the original project's `master` branch (a Windows app built with WPF on .NET 8)
 - **Fork work so far:** 48 commits (11 of them merges) on 15 branches, plus this plan on `notes`; `master` itself is
   untouched
-- **Status:** Stage F is finished and checked: the 11 fixes are combined on `integrate/stage-f` (local, not pushed),
-  reviewed, and pass 201 checks and a real run of the app; merging it into `fork/main` waits for your OK.
-  Smoother scrolling (6.1) is paused
+- **Status:** Stage F is finished, checked (201 checks and a real run of the app) and merged into `fork/main`
+  (local, not pushed). Smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -80,9 +79,8 @@ down keep the technical detail for whoever does the work.
 
 ### What's next
 
-1. **Close Stage F** ([Stage F progress](#stageFprogress)). The work is done and checked. Left: your OK to merge
-   `integrate/stage-f` into `fork/main` (the fork's own line), and your answer on offering Stage F to the
-   original author.
+1. **Stage F is closed** ([Stage F progress](#stageFprogress)): merged into `fork/main` on 23 November (local,
+   not pushed). Only the upstream question is left, and you chose to decide it later.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -100,9 +98,10 @@ down keep the technical detail for whoever does the work.
   questions on overrides and categories (Stage 6).
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
 - **Stage F upstream:** *decided 23 November:* no fix is offered on its own. All of Stage F may be offered
-  together once it is finished, and even that is still only a maybe. On 23 November you chose to decide after
-  the real-app run, which has now passed: **open again.**
-- **Merge Stage F into `fork/main`:** `integrate/stage-f` is checked and ready; merging needs your OK.
+  together once it is finished, and even that is still only a maybe. Asked again after the real-app run passed
+  (23 November): "decide later". Still open.
+- **Pushing:** `fork/main`, `integrate/stage-f`, the eleven `fix/*` branches and the `notes` updates are all
+  local only; push when you want them on GitHub.
 
 ### Housekeeping
 
@@ -157,8 +156,8 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
   and fix what it found (one integration commit, then 5 review-fix commits), 201 checks pass
 - [x] Real runs of the app with all 11 fixes (23 November, two automated runs on a throwaway profile folder: 84 of 85
   checks pass, the 85th was the test script's mistake; your real files unchanged)
-- [ ] Merge `integrate/stage-f` into `fork/main` (needs your OK)
-- [ ] Decide about offering Stage F upstream
+- [x] Merge `integrate/stage-f` into `fork/main` (23 November, `75eddc74`, local, not pushed)
+- [ ] Decide about offering Stage F upstream (23 November: "decide later")
 
 **Stage 2: exporting a zip**
 - [ ] Fix the export bugs as revised in Stage 2 (`fix/zip-export-corruption`)
@@ -527,8 +526,8 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 
 #### Stage F progress (23 November)
 
-**In short:** all eleven fixes are done, combined on `integrate/stage-f`, reviewed together, and checked in the real
-app (23 November). Left: your OK to merge it into `fork/main`, and the upstream decision.
+**In short:** all eleven fixes are done, combined on `integrate/stage-f`, reviewed together, checked in the real
+app and merged into `fork/main` (23 November, `75eddc74`, local). Left: the upstream decision.
 
 | Branch | Commit | What changed | Checked by |
 |---|---|---|---|
