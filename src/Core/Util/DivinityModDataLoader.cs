@@ -831,6 +831,7 @@ public static partial class DivinityModDataLoader
 	public static async Task<ModSettingsParseResults> LoadModSettingsFileAsync(string path)
 	{
 		var activeMods = new List<DivinityProfileActiveModData>();
+		string readError = null;
 
 		if (File.Exists(path))
 		{
@@ -842,6 +843,13 @@ public static partial class DivinityModDataLoader
 			catch (Exception ex)
 			{
 				DivinityApp.Log($"Error reading '{path}':\n{ex}");
+			}
+
+			if (modSettingsRes == null)
+			{
+				// LSLib rejects the whole file when one value doesn't parse (a UUID that isn't a GUID, a Version64 over int64),
+				// which read as an empty order; read the entries one by one instead and skip only the bad ones
+				readError = LoadModSettingsEntriesFromXml(path, activeMods);
 			}
 
 			if (modSettingsRes != null && modSettingsRes.Regions.ContainsKey("ModuleSettings") && modSettingsRes.Regions.TryGetValue("ModuleSettings", out var region))
@@ -872,7 +880,53 @@ public static partial class DivinityModDataLoader
 		return new ModSettingsParseResults()
 		{
 			ActiveMods = activeMods,
+			ReadError = readError,
 		};
+	}
+
+	/// <summary>Reads the entries of modsettings.lsx one by one, skipping any whose UUID isn't a GUID.</summary>
+	/// <returns>Null, or why the file could not be read at all.</returns>
+	private static string LoadModSettingsEntriesFromXml(string path, List<DivinityProfileActiveModData> activeMods)
+	{
+		try
+		{
+			XDocument xml;
+			using (var fs = File.Open(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+			{
+				xml = XDocument.Load(fs);
+			}
+			var entries = xml.Descendants("region").FirstOrDefault(x => x.Attribute("id")?.Value == "ModuleSettings")?
+				.Descendants("node").FirstOrDefault(x => x.Attribute("id")?.Value == "Mods")?
+				.Element("children")?.Elements("node").Where(x => x.Attribute("id")?.Value == "ModuleShortDesc");
+			foreach (var node in entries ?? [])
+			{
+				var uuid = GetAttributeValueWithId(node, "UUID", "");
+				if (!Guid.TryParse(uuid, out var guid))
+				{
+					DivinityApp.Log($"Skipped an entry of '{path}' whose UUID '{uuid}' is not a GUID (Name '{GetAttributeValueWithId(node, "Name", "")}')");
+					continue;
+				}
+				var activeModData = new DivinityProfileActiveModData()
+				{
+					Folder = GetAttributeValueWithId(node, "Folder", ""),
+					MD5 = GetAttributeValueWithId(node, "MD5", ""),
+					Name = GetAttributeValueWithId(node, "Name", ""),
+					// The text LSLib gives a guid attribute when GUIDs aren't byte-swapped, as for this file
+					UUID = guid.ToString(),
+					Version = SafeConvertStringUnsigned(GetAttributeValueWithId(node, "Version", "")),
+				};
+				if (!IgnoreMod(activeModData.UUID))
+				{
+					activeMods.Add(activeModData);
+				}
+			}
+			return null;
+		}
+		catch (Exception ex)
+		{
+			DivinityApp.Log($"Error reading '{path}':\n{ex}");
+			return ex.Message;
+		}
 	}
 
 	public static async Task<List<DivinityProfileData>> LoadProfileDataAsync(string profilePath)
@@ -1460,6 +1514,12 @@ public static partial class DivinityModDataLoader
 		return orderList;
 	}
 
+	/// <summary>
+	/// Whether a mod can go into modsettings.lsx. Its UUID attribute is type="guid", and one value that isn't a GUID
+	/// (a meta-less override pak's UUID is its file path) makes LSLib, and so this app, reject the whole file.
+	/// </summary>
+	public static bool CanWriteToModSettings(DivinityModData mod) => mod != null && Guid.TryParse(mod.UUID, out _);
+
 	public static string GenerateModSettingsFile(IEnumerable<DivinityModData> orderList)
 	{
 		/* The "Mods" node is used for the in-game menu it seems. The selected adventure mod is always at the top. */
@@ -1467,11 +1527,18 @@ public static partial class DivinityModDataLoader
 
 		foreach (var mod in orderList)
 		{
-			if (!String.IsNullOrWhiteSpace(mod.UUID))
+			if (CanWriteToModSettings(mod))
 			{
 				string safeName = System.Security.SecurityElement.Escape(mod.Name);
+				string safeFolder = System.Security.SecurityElement.Escape(mod.Folder);
+				// Version64 is an int64 attribute: write the same 64 bits signed, since a value over long.MaxValue would make the whole file unreadable too
+				var version = unchecked((long)mod.Version.VersionInt);
 				// MD5 doesn't seem to actually be used
-				modShortDescText += String.Format(DivinityApp.XML_MODULE_SHORT_DESC, mod.Folder, mod.MD5 ?? "", safeName, mod.UUID, mod.Version.VersionInt, mod.PublishHandle) + Environment.NewLine;
+				modShortDescText += String.Format(DivinityApp.XML_MODULE_SHORT_DESC, safeFolder, System.Security.SecurityElement.Escape(mod.MD5 ?? ""), safeName, mod.UUID, version, mod.PublishHandle) + Environment.NewLine;
+			}
+			else if (!String.IsNullOrWhiteSpace(mod?.UUID))
+			{
+				DivinityApp.Log($"Left '{mod.Name}' out of modsettings.lsx: its UUID '{mod.UUID}' is not a GUID");
 			}
 		}
 

@@ -2974,7 +2974,16 @@ Directory the zip will be extracted to:
 			{
 				await Observable.Start(() =>
 				{
-					ShowAlert($"Exported load order to '{outputPath}'", AlertType.Success, 15);
+					// GenerateModSettingsFile leaves these out: one ID that isn't a GUID would make the whole file unreadable
+					var skippedMods = finalOrder.Where(x => !String.IsNullOrWhiteSpace(x.UUID) && !DivinityModDataLoader.CanWriteToModSettings(x)).Select(x => x.Name).ToList();
+					if (skippedMods.Count > 0)
+					{
+						ShowAlert($"Exported load order to '{outputPath}', but left out {String.Join(", ", skippedMods)}: a mod ID that is not a valid UUID would make the game's mod list unreadable", AlertType.Warning);
+					}
+					else
+					{
+						ShowAlert($"Exported load order to '{outputPath}'", AlertType.Success, 15);
+					}
 
 					if (DivinityModDataLoader.ExportedSelectedProfile(PathwayData.AppDataProfilesPath, SelectedProfile.UUID))
 					{
@@ -5483,7 +5492,11 @@ Directory the zip will be extracted to:
 				{
 					var activeCount = ActiveMods.Count;
 					var modSettingsData = await DivinityModDataLoader.LoadModSettingsFileAsync(e.FullPath);
-					if (activeCount > 0 && modSettingsData.CountActive() <= 0)
+					if (modSettingsData.ReadError != null)
+					{
+						ShowAlert($"The active load order (modsettings.lsx) could not be read: {modSettingsData.ReadError}", AlertType.Danger);
+					}
+					else if (activeCount > 0 && modSettingsData.CountActive() <= 0)
 					{
 						ShowAlert("The active load order (modsettings.lsx) has been reset externally", AlertType.Danger);
 						RxApp.MainThreadScheduler.Schedule(() =>
