@@ -2119,6 +2119,7 @@ Directory the zip will be extracted to:
 			if (!DivinityModDataLoader.IgnoreMod(entry.UUID))
 			{
 				var modResult = mods.Lookup(entry.UUID);
+				entry.Missing = !modResult.HasValue;
 				if (modResult.HasValue)
 				{
 					var mod = modResult.Value;
@@ -2856,7 +2857,8 @@ Directory the zip will be extracted to:
 		try
 		{
 			var backupOrder = new DivinityLoadOrder { Name = DivinityApp.PATH_LAST_EXPORTED_NAME, FilePath = backupOrderPath };
-			backupOrder.SetOrder(SelectedModOrder);
+			//Back up what was written to the game, without the entries of mods that aren't installed
+			backupOrder.SetOrder(SelectedModOrder.Order.Where(x => !x.Missing));
 
 			await DivinityModDataLoader.ExportLoadOrderToFileAsync(backupOrderPath, backupOrder);
 			var updatedOrder = false;
@@ -2937,7 +2939,7 @@ Directory the zip will be extracted to:
 			await BackupCurrentLoadOrderAsync();
 
 			var dir = GetLarianStudiosAppDataFolder();
-			if (SelectedModOrder.Order.Count > 0)
+			if (SelectedModOrder.Order.Any(x => !x.Missing))
 			{
 				await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, false, false, true);
 			}
@@ -2964,15 +2966,16 @@ Directory the zip will be extracted to:
 						DivinityApp.Log($"Could not set active profile to '{SelectedProfile.Name}'");
 					}
 
-					//Update "Current" order
+					//Update "Current" order to mirror what was written, which skips the entries of mods that aren't installed
+					var exportedEntries = SelectedModOrder.Order.Where(x => !x.Missing).ToList();
 					if (!SelectedModOrder.IsModSettings)
 					{
-						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(SelectedModOrder.Order);
+						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(exportedEntries);
 					}
 
 					List<string> orderList = [];
 					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(SelectedModOrder.Order.Select(x => x.UUID));
+					orderList.AddRange(exportedEntries.Select(x => x.UUID));
 
 					SelectedProfile.ActiveMods.Clear();
 					SelectedProfile.ActiveMods.AddRange(orderList.Select(x => ProfileActiveModDataFromUUID(x)));
@@ -4886,8 +4889,7 @@ Directory the zip will be extracted to:
 
 		if (SelectedModOrder != null)
 		{
-			SelectedModOrder.Order.Clear();
-			SelectedModOrder.AddRange(ActiveMods, true);
+			SelectedModOrder.UpdateFrom(ActiveMods, uuid => mods.Lookup(uuid).HasValue);
 		}
 	}
 
