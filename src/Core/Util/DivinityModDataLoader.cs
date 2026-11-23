@@ -1404,25 +1404,12 @@ public static partial class DivinityModDataLoader
 		foreach (var d in dependencies)
 		{
 			var dependencyModData = allMods.FirstOrDefault(x => x.UUID == d.UUID);
-			if (dependencyModData != null)
+			//Mark it as added before recursing, so a mod that depends on itself, or mods that depend on each other, can't recurse forever
+			if (dependencyModData != null && addedMods.Add(dependencyModData.UUID))
 			{
-				var dependencyMods = GetDependencyMods(dependencyModData, allMods, addedMods);
-				if (dependencyMods.Count > 0)
-				{
-					foreach (var m in dependencyMods)
-					{
-						if (!addedMods.Contains(m.UUID))
-						{
-							addedMods.Add(m.UUID);
-							mods.Add(m);
-						}
-					}
-				}
-				if (!addedMods.Contains(dependencyModData.UUID))
-				{
-					mods.Add(dependencyModData);
-					addedMods.Add(dependencyModData.UUID);
-				}
+				//Its own dependencies go before it
+				mods.AddRange(GetDependencyMods(dependencyModData, allMods, addedMods));
+				mods.Add(dependencyModData);
 			}
 		}
 		return mods;
@@ -1439,8 +1426,11 @@ public static partial class DivinityModDataLoader
 			{
 				orderList.AddRange(GetDependencyMods(selectedAdventure, allMods, addedMods));
 			}
-			orderList.Add(selectedAdventure);
-			addedMods.Add(selectedAdventure.UUID);
+			//Already added if one of its dependencies depends on it
+			if (addedMods.Add(selectedAdventure.UUID))
+			{
+				orderList.Add(selectedAdventure);
+			}
 		}
 
 		foreach (var m in order.Where(x => !x.Missing))
