@@ -5,8 +5,9 @@ The plan for the SpasticPengu fork of BG3 Mod Manager. Work that could also help
 without dragging fork-only changes along with it.
 
 - **Based on:** the original project's `master` branch (a Windows app built with WPF on .NET 8)
-- **Fork work so far:** 22 commits on 9 branches; `master` itself is untouched
-- **Status:** Stage F under way (7 of 11 fixes done, not pushed); smoother scrolling (6.1) is paused
+- **Fork work so far:** 29 commits on 13 branches; `master` itself is untouched
+- **Status:** Stage F's 11 fixes are all done (not pushed); fixes 6 to 11 still need one real run of the app;
+  smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -28,7 +29,7 @@ down keep the technical detail for whoever does the work.
   23 November. Most of it holds up, and it found about 20 bugs the plan didn't know about. Some of them
   can quietly lose a load order, crash the app or reset settings. They are collected in
   [Stage F](#stageF).
-- **Stage F is under way: 7 of its 11 fixes are done** (23 November), each on its own branch. Fixes 1 to 5
+- **Stage F: all 11 fixes are done** (23 November), each on its own branch. Fixes 1 to 5
   were checked by a small test program and in one real run of the app (all passed); an independent review
   then found a few flaws in them, now fixed and re-checked. They fix: the window position and the
   admin-warning choice being forgotten; Save or Export crashing when mods depend on each other in a loop;
@@ -37,12 +38,23 @@ down keep the technical detail for whoever does the work.
   fixed on the way: Export left out a dependency's own dependencies, and a restored window could land on an
   unplugged monitor. Your own data: none of your mods loop, 13 of your 16 saved orders hold mods that aren't
   installed (a Save would have deleted them), and 3 orders were missing one dependency each.
-- **Fixes 6 and 7 are done too** (test program and independent review, not yet the real app). Export to game
-  now keeps a copy of the game's previous mod list, never jumps to another saved order, never locks the app,
-  and refuses to write a list the game couldn't read. The "use the last exported order?" question at startup
-  can no longer empty that backup; on your orders, answering Yes would have overwritten your saved order
-  "5 Player - Hard UW". Your own `modsettings.lsx.bak` (934 mods, 19 September) is safe: the app's new
-  backup uses its own name, `modsettings.lsx.bg3mm.bak`.
+- **Fixes 6 to 11** were each checked by a test program and by an independent review whose findings are
+  fixed; none has been tried in the real app yet. What they fix:
+  - Export to game now keeps a copy of the game's previous mod list, never jumps to another saved order,
+    never locks the app, and refuses to write a list the game couldn't read. Your own `modsettings.lsx.bak`
+    (934 mods, 19 September) is safe: the app's new backup has its own name, `modsettings.lsx.bg3mm.bak`.
+  - The "use the last exported order?" question at startup can no longer empty that backup; on your
+    orders, answering Yes would have overwritten your saved order "5 Player - Hard UW".
+  - A mod with a broken ID (a file path where an ID belongs) is left out of the game's mod list with a
+    warning, instead of making the whole list unreadable; a list that already has such an entry is read
+    without it instead of coming back empty.
+  - A failed update check no longer says "up to date", and cancelling an update download no longer closes
+    the app.
+  - A booby-trapped mod or archive can no longer write files outside the folder they belong in (three
+    ways in were closed: compressed-pak import, zip import, and Extract Selected Mods). The same hole in
+    the bundled LSLib library is written up as a separate patch.
+  - The startup "duplicate mods" dialog never offers the game's own files for deletion. Your
+    `PartyLimitBegone.pak` holds copies of 9 game modules; renamed, it would have offered `Gustav.pak`.
 - **Everything else hasn't started.** The review sketched designs for most stages, and a new
   [Stage L](#stageL) for the mod library you asked for: keep every version of each mod, and let each
   load order use its own versions.
@@ -52,11 +64,10 @@ down keep the technical detail for whoever does the work.
 
 ### What's next
 
-1. **Fix the bugs that lose data or crash the app** ([Stage F](#stageF)). Each fix is small and gets its
-   own branch, so it can be offered to the original author too. *Decided 23 November: this goes first,
-   in the order of the Stage F checklist below.* **Next up: fix 8, never write a broken mod ID into the
-   game's mod list** (`fix/modsettings-write-guard`); start at [Stage F progress](#stageFprogress), which
-   says how the others were done and checked.
+1. **Finish Stage F** ([Stage F](#stageF)). All 11 fixes are written and checked outside the app. Left:
+   one real run of the app for fixes 6 to 11 (needs your OK; the steps are in
+   [Verification, Stage F](#verify)), then putting the branches together (one small known clash, see
+   [Stage F progress](#stageFprogress)) and your answer on offering Stage F to the original author.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -75,6 +86,9 @@ down keep the technical detail for whoever does the work.
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
 - **Stage F upstream:** *decided 23 November:* no fix is offered on its own. All of Stage F may be offered
   together once it is finished, and even that is still only a maybe: ask again at the end of Stage F.
+  **The code is now finished, so this question is open again.**
+- **Stage F real-app check of fixes 6 to 11:** may the app be started once more to try them? It opens a
+  window; your mod list file and saved orders are backed up first.
 
 ### Housekeeping
 
@@ -115,14 +129,18 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
 - [x] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`, `c8c21eed`)
 - [x] One real launch of the app to confirm the five fixes above (23 November, all 17 checks passed), plus an
   independent review whose findings are fixed in follow-up commits (see [Stage F progress](#stageFprogress))
-- [x] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`, `1ff34c38`).
+- [x] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`, `a38715d9`).
   Also: it refuses to write a list the game couldn't read, and saved orders can no longer be left half-written
 - [x] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`, `da623aaf`). On your
   orders a Yes would have overwritten "5 Player - Hard UW"; one backup per profile is left for later (rarely matters)
-- [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
-- [ ] Updater: no "up to date" after a failed check, no closing on a cancelled download (`fix/updater-errors`)
-- [ ] A booby-trapped mod can't write outside the Mods folder (`fix/path-containment`)
-- [ ] Never offer the game's own files for deletion (`fix/duplicate-dialog-larian`)
+- [x] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`, `385577f2`). Also: a
+  list holding one broken entry is read without it instead of coming back empty
+- [x] Updater: no "up to date" after a failed check, no closing on a cancelled download (`fix/updater-errors`, `0ff908bd`)
+- [x] A booby-trapped mod can't write outside the Mods folder (`fix/path-containment`, `77d1a56a`). Also closed: the same
+  hole in zip imports. The LSLib half is a separate patch (see [Stage F progress](#stageFprogress))
+- [x] Never offer the game's own files for deletion (`fix/duplicate-dialog-larian`, `1fd0b432`)
+- [ ] One real launch of the app to confirm fixes 6 to 11 (needs your OK; steps in [Verification](#verify))
+- [ ] Put the 11 branches together (one known clash, between fixes 4 and 6) and decide about offering them upstream
 
 **Stage 2: exporting a zip**
 - [ ] Fix the export bugs as revised in Stage 2 (`fix/zip-export-corruption`)
@@ -491,8 +509,8 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 
 #### Stage F progress (23 November)
 
-**In short:** seven fixes are done; the first five are also checked in the real app. Next:
-`fix/modsettings-write-guard`.
+**In short:** all eleven fixes are done; the first five are also checked in the real app, fixes 6 to 11 still need
+that one run.
 
 | Branch | Commit | What changed | Checked by |
 |---|---|---|---|
@@ -501,8 +519,34 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 | `fix/order-keep-missing` | `bb07d2bf`, `78924a47` | `LoadModOrder` sets `entry.Missing`; `DivinityLoadOrder.UpdateFrom(activeMods, isInstalled)` (one linear pass, swapped in at the end) puts Missing entries back after the entry they followed, and clears the flag for a mod installed since. After Export, Current, the profile's list and LastExported mirror only non-Missing entries (what was written). Save As still drops missing mods on purpose; Clear Missing Mods still removes them; Export's missing-mods notice now lists them. | 32 PASS: 16 cases + 1,000-entry timing (0.45 ms; a first O(n²) draft took 19 ms) + the 13 saved orders holding missing mods, all kept in order. App run: a saved order kept its not-installed mod. |
 | `fix/background-errors` | `7f19c08c`, `11016f41` | `ReactiveExtensions.ScheduleAsyncSafe`; every `ScheduleAsync` in `src` now goes through it (15 `RunInBackground` jobs, Save, the SE manifest check): log, `ShowAlert`, then cleanup of only what the job set (`ResetBusyState` for refreshes; `IsRefreshing` + overlay for ImportMods; `IsLoadingOrder` for Export to game and Save, since the first export builds LastExported through `AddNewModOrder` → `BuildModOrderList`; `OnMainProgressComplete` for zip, extract and the SE download, guarded there by `progressDone`). | 11 PASS (task pool, current-thread and event-loop schedulers): master's error reaches no handler (only `UnobservedTaskException` after a forced GC); errors before and after an await are reported, cancellation is not, the 2 s delay and disposal still work. |
 | `fix/hotkey-validation` | `c8c21eed`, `2cc1c6c3` | `Hotkey.IsValidGesture` (asks `KeyGesture` itself); the editor refuses and says the modifier must still be held when the key is released; `LoadKeybindings` skips saved invalid ones and names them (`AppKeys` now sets `DisplayName` from `[MenuSettings]` at construction). | 17 PASS: the startup `KeyBinding` throws for a plain L; `IsValidGesture` agrees with it on 16 pairs. App run: started with a saved plain L, warned, dropped it (the run showed the then-blank name, fixed in `2cc1c6c3`). |
-| `fix/export-to-game` | `1ff34c38` | `DivinityFileUtils.WriteFileSafelyAsync`: a uniquely named temp file next to the target, flushed, an optional check on it, the old file copied to a backup path, then one rename (a symbolic link is written through). `ExportModSettingsToFileAsync` uses it with backup `modsettings.lsx.bg3mm.bak` (the owner keeps a hand-made 934-mod `modsettings.lsx.bak` in `PlayerProfiles\Public`) and a read-back check: every non-ignored mod written must parse back with the app's own reader, so a path UUID (CLAIM-15) or a Version64 of 2^63 or more (LOAD-06) now fails the export and keeps the old file. `ExportLoadOrderToFileAsync` (Save of a saved order, LastExported) writes through it too: HARV-62 for those paths, Save As still writes in place. `ExportLoadOrder` runs on the UI thread. LastExported is replaced only after a successful write; a new entry goes in at index 1, where `BuildModOrderList` puts it, with the selection kept, never through `AddNewModOrder`. The failure message names the likely causes. | 25 PASS: master's in-place write, its empty file after a failed write, its unreadable file for a path UUID and for version 2^63, and its selection jump are reproduced; the fix keeps the target on a locked or read-only file and on a refused or throwing check, keeps `.bg3mm.bak`, leaves the user's own `.bak` alone, and survives 8 overlapping writes on one UI thread; `BackupCurrentLoadOrderAsync`, run on the real view model, inserts or updates LastExported with the selection kept. Not run: the symbolic-link case (needs Developer Mode). Review: 1 major (a "never back up an empty order" rule would make the startup prompt nag a user who exports an empty list on purpose; dropped), 1 minor (insert position), 2 nits (shared temp name, symlink); all fixed in the commit. |
+| `fix/export-to-game` | `a38715d9` | `DivinityFileUtils.WriteFileSafelyAsync`: a uniquely named temp file next to the target, flushed, an optional check on it, the old file copied to a backup path, then one rename (a symbolic link is written through). `ExportModSettingsToFileAsync` uses it with backup `modsettings.lsx.bg3mm.bak` (the owner keeps a hand-made 934-mod `modsettings.lsx.bak` in `PlayerProfiles\Public`) and a read-back check: every non-ignored `ModuleShortDesc` actually written (counted in the generated XML, so fix 8 leaving an entry out does not trip it) must parse back with the app's own reader, so a path UUID (CLAIM-15) or a Version64 of 2^63 or more (LOAD-06) now fails the export and keeps the old file. `ExportLoadOrderToFileAsync` (Save of a saved order, LastExported) writes through it too: HARV-62 for those paths, Save As still writes in place. `ExportLoadOrder` runs on the UI thread. LastExported is replaced only after a successful write; a new entry goes in at index 1, where `BuildModOrderList` puts it, with the selection kept, never through `AddNewModOrder`. The failure message names the likely causes. | 25 PASS: master's in-place write, its empty file after a failed write, its unreadable file for a path UUID and for version 2^63, and its selection jump are reproduced; the fix keeps the target on a locked or read-only file and on a refused or throwing check, keeps `.bg3mm.bak`, leaves the user's own `.bak` alone, and survives 8 overlapping writes on one UI thread; `BackupCurrentLoadOrderAsync`, run on the real view model, inserts or updates LastExported with the selection kept. Not run: the symbolic-link case (needs Developer Mode). Review: 1 major (a "never back up an empty order" rule would make the startup prompt nag a user who exports an empty list on purpose; dropped), 1 minor (insert position), 2 nits (shared temp name, symlink); all fixed in the commit. |
 | `fix/restore-prompt` | `da623aaf` | `DivinityLoadOrder.SetOrder` copies before clearing (alias-safe; the order overload delegates to the list one). `CheckForEmptyOrderAsync` writes into no saved order: the profile's mods are cleared and refilled from LastExported, `modsettings.lsx` is written from it, an alert says when that write fails (the game does not have the list yet), then `BuildModOrderList(0)` shows Current. HARV-54 (one LastExported for all profiles) is left for later: it needs a profile set without "Public", and its fix touches `BackupCurrentLoadOrderAsync`. | 9 PASS: master's restore reproduced emptying LastExported, and, on the owner's 16 saved orders, overwriting "5 Player - Hard UW" (73 mods) with LastExported's 29; the fixed `SetOrder` keeps itself, keeps its own list, applies a filter over it; an IL scan of the built method finds no `SetOrder` and a profile `Clear`. Not run: the prompt flow itself (modal dialog). Review: ship with nits (the alert wording, done). |
+| `fix/modsettings-write-guard` | `385577f2` | `DivinityModDataLoader.CanWriteToModSettings` (`Guid.TryParse`, exactly what LSLib's guid attribute accepts). `GenerateModSettingsFile` leaves out and logs a mod that fails it, writes Version64 as the same 64 bits signed (`unchecked((long)VersionInt)`), and escapes Folder and MD5. `LoadModSettingsFileAsync`: when LSLib rejects the file, `LoadModSettingsEntriesFromXml` reads the `ModuleShortDesc` rows with XDocument and skips only rows whose UUID is not a GUID; `ModSettingsParseResults.ReadError` is set when the file can't be read at all. Export warns with the names it left out; the modsettings watcher says "could not be read" instead of "reset externally" when ReadError is set. | 16 PASS: master's path UUID and version 2^63 make LSLib reject the whole file, a '&' in Folder breaks the XML, one bad row empties the read; the fix leaves the bad mod out and keeps the rest readable, keeps the version's bits, escapes Folder and MD5, reads all good rows of a file master wrote, reports a cut-off file, and its row reader gives the same 30 entries as LSLib, field for field, on the owner's real `modsettings.lsx`. Review: ship with nits (MD5 escaping and the version's bits, done). Left: see follow-ups below. |
+| `fix/updater-errors` | `0ff908bd` | `OnUpdateCheckAsync` returns early on `args.Error` (AutoUpdater raises `CheckForUpdateEvent` with only Error set when the feed fails): log, a Danger alert on a manual check. All window-bound writes run in one `Observable.Start` on the UI thread (SVC-09). `TryRunUpdate` calls `Application.Current.Shutdown()` only when `DownloadUpdate` returns true; otherwise a warning, and the update window stays open for a retry; no `Environment.Exit`. | 8 PASS: AutoUpdater's failure args carry IsUpdateAvailable false (master's bug); the real handler, called from a pool thread with an event-loop UI thread, keeps no update args after a failure, logs the cause, still fills in an available update, and sets every window property on the UI thread; an IL scan of `TryRunUpdate` finds no `Environment.Exit`, a `Shutdown` and the warning. Not run: AutoUpdater's modal download dialog. Review: ship with nits (the comment wrongly said the close handlers save the load order: they save window position and `settings.json`; fixed). |
+| `fix/path-containment` | `77d1a56a` | `DivinityFileUtils.GetContainedPath(root, name)`: the full path `Path.Join(root, name)` resolves to, or null outside root (ordinal prefix test, so a case-only difference counts as outside). Every pak extraction goes through `UncompressPackageContained`, which gives LSLib a filter that skips and logs escaping entries and returns false. The compressed-pak import (SVC-01) and the zip/7z import (found by the review: `Path.GetFileName("x/D:evil.pak")` is drive-relative) pass names through `MakeSafeFilename` + `GetContainedPath`; the editor-mod archive export names its temp pak with `MakeSafeFilename`. The LSLib patch is written up in `...\side-session-notes\local_e41f79c8-ab41-48e5-b759-9212d1b0b757\lslib-uncompress-containment.md`. | 25 PASS: `GetContainedPath` on 13 names; a pak crafted with LSLib's own writer puts 2 files outside the folder with master's call and none with the fix, which still extracts the normal file, reports failure and honours a caller's filter; for crafted Folder values and zip entry names master's path leaves Mods and the fix's stays in it; IL scans show both imports call both helpers. Review: 1 minor (the zip sibling) and 3 nits, fixed except one: the editor export still reads `Mods/<Folder>` with an unchecked Folder (a read of the user's own loose project; follow-up). |
+| `fix/duplicate-dialog-larian` | `1fd0b432` | `DivinityModDataLoader.CanDeleteDataFolderDuplicate(baseMod, baseMods)`: false for an editor project, a Larian module (`IsLarianMod`, or a UUID in IgnoredMods, since IsLarianMod is only an Author test and Engine's Author is "LS"), a module with no file, or a Data pak other loaded modules also come from. The startup duplicate rule (`MainWindowViewModel.cs:1695-1702`) offers only base mods that pass and logs the rest. A user's single-module pak in Data is still offered (e218226c). | 6 PASS on the owner's real GOG Data folder read with `LoadBuiltinModsAsync` (22 base modules, 7 of them the owner's loose projects): master offers the game pak for all 15 game modules when a Mods pak reuses their UUID (`PartyLimitBegone.pak` holds 9 such metas, its first is Gustav's); the fix offers none, still offers a single-module user pak, and refuses a multi-module pak, a Larian UUID with a non-Larian Author and a module with no file. Review: ship with nits (the log wording, done). |
+
+**Putting the branches together.** A test merge of every pair of the 11 fix branches (`git merge-tree`, no
+checkout) finds 1 conflict in 55 pairs: `fix/background-errors` + `fix/export-to-game`, both rewriting the one
+scheduling line of `ExportLoadOrder`. Resolve it as
+`RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (ctrl, t) => await ExportLoadOrderAsync(), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));`
+(the UI thread from fix 6, the error report from fix 4). Things that merge cleanly but should be looked at together:
+with fixes 3 and 8 both in, fix 3's `exportedEntries` (what Current and the profile mirror after an export)
+should also drop mods fix 8 leaves out (`Guid.TryParse` on the entry UUID); fix 6's read-back count already
+counts only what fix 8 wrote.
+
+**Follow-ups found on the way** (none blocks Stage F):
+- HARV-54: one LastExported for every profile. Needs a profile set without "Public"; the fix touches
+  `BackupCurrentLoadOrderAsync` (one name helper, e.g. `LastExported_<Profile>.json`, Public unchanged).
+- Rows that fix 8 skips when reading `modsettings.lsx` are only logged (logging is off by default); a warning at
+  startup would need `RefreshAsync` or `CheckForEmptyOrderAsync`, which fixes 4 and 7 change. The restore path
+  gives no "left out" warning either.
+- The editor-mod archive export reads `Mods/<Folder>` and `Public/<Folder>` with an unchecked Folder.
+- The LSLib extraction patch (above) for LaughingLeader/lslib.
+- `SharpCompress` 0.39.0, used for zip/7z import, has a known moderate advisory (GHSA-6c8g-7p36-r338; every build
+  warns NU1902). Not checked what it covers.
+- `DivinityModData.CanDelete` trusts only the Author test, not IgnoredMods; harmless today because LSLib blacklists
+  `Engine.pak` (the only Larian meta with Author "LS"), worth one line if that changes.
 
 **How the checks run.** A throwaway console program references the built `bin\Debug` DLLs and logs PASS/FAIL;
 one `<Name>Check.cs` per branch, built alone because each branch only has its own fix. It is kept outside the
@@ -545,7 +589,8 @@ is now 26 entries (was 935 in September). Reading the 1,132 paks with the app's 
 
 - Drops into a column-sorted active list land at the sorted position, not the load-order one (HARV-71).
 - Duplicates with equal versions get an arbitrary winner, and the losers are pre-ticked for deletion (HARV-63).
-- Saved order JSON files are rewritten in place, so a crash mid-write empties them (HARV-62).
+- Saved order JSON files are rewritten in place, so a crash mid-write empties them (HARV-62). Fixed for Save and
+  LastExported on `fix/export-to-game`; Save As still writes in place.
 - Menu shortcut labels go stale after a rebind (HARV-08). Tab is captured by the `SwapListFocus` hotkey in the main window; Shift+Tab still works (HARV-10, needs a runtime test).
 - The Script Extender updater writes `DWrite.dll` in place, so a cancel or a decompression failure can truncate it (HARV-47).
 - The screen-reader probe runs 3-4 times per mod during load (CLAIM-08; cost unmeasured, probably small).
@@ -1065,6 +1110,18 @@ Select several orders; produce one zip containing each order's JSON plus the uni
 - Bind a hotkey to a single letter: the editor rejects it, and a `keybindings.json` that already holds one loads with a warning instead of a crash.
 - Load an order with a missing mod and Save: the missing entry is still in the saved JSON, in place.
 - Empty `Orders` folder, then Save and Export Current: the selection stays on Current, the app stays unlocked, and a `modsettings.lsx` backup exists.
+  In a throwaway build with its own settings and an empty `Orders` folder: select a saved order, Export Order to
+  Game, and check that the selection stays put, `modsettings.lsx.bg3mm.bak` appears next to `modsettings.lsx`
+  (and nothing touches an existing `modsettings.lsx.bak`), and LastExported joins the list second.
+- Startup with a `modsettings.lsx` holding only the campaign and a non-empty LastExported: answer Yes; Current
+  shows the restored list, the saved orders and LastExported are unchanged.
+- An order holding an override pak whose ID is its file path: Export warns and names it, and `modsettings.lsx`
+  still reads back. A `modsettings.lsx` with one such row loads the other mods.
+- Offline, press F7: a red "Failed to check for updates" alert, no "up-to-date". (The download-cancel path needs a
+  build that thinks it is old; see the fix 9 design notes before trying it.)
+- Extract Selected Mods on a crafted pak with a `..\` entry: the error alert shows, nothing lands outside the
+  chosen folder.
+- A Mods pak whose meta reuses `Gustav`'s UUID: startup offers no game pak for deletion.
 - Restart with Save Window Location on: the window comes back where it was.
 - Each check ships as an instrumented dev check that logs PASS/FAIL, per the standing rule.
 
