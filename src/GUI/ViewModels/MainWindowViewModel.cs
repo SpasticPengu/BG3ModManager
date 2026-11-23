@@ -2868,14 +2868,20 @@ Directory the zip will be extracted to:
 		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (ctrl, t) => await ExportLoadOrderAsync(), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
+	/// <summary>
+	/// Whether an export writes this entry to modsettings.lsx: only installed mods whose ID is a GUID
+	/// (BuildOutputList skips the rest, GenerateModSettingsFile leaves out the others, see CanWriteToModSettings).
+	/// </summary>
+	private static bool IsWrittenOnExport(DivinityLoadOrderEntry entry) => !entry.Missing && Guid.TryParse(entry.UUID, out _);
+
 	private async Task BackupCurrentLoadOrderAsync()
 	{
 		var backupOrderPath = Path.Combine(GetOrdersDirectory(), DivinityApp.PATH_LAST_EXPORTED_NAME + ".json");
 		try
 		{
 			var backupOrder = new DivinityLoadOrder { Name = DivinityApp.PATH_LAST_EXPORTED_NAME, FilePath = backupOrderPath };
-			//Back up what was written to the game, without the entries of mods that aren't installed
-			backupOrder.SetOrder(SelectedModOrder.Order.Where(x => !x.Missing));
+			//Back up what was written to the game
+			backupOrder.SetOrder(SelectedModOrder.Order.Where(IsWrittenOnExport));
 
 			await DivinityModDataLoader.ExportLoadOrderToFileAsync(backupOrderPath, backupOrder);
 			var updatedOrder = false;
@@ -3001,8 +3007,8 @@ Directory the zip will be extracted to:
 						DivinityApp.Log($"Could not set active profile to '{SelectedProfile.Name}'");
 					}
 
-					//Update "Current" order to mirror what was written, which skips the entries of mods that aren't installed
-					var exportedEntries = SelectedModOrder.Order.Where(x => !x.Missing).ToList();
+					//Update "Current" order to mirror what was written
+					var exportedEntries = SelectedModOrder.Order.Where(IsWrittenOnExport).ToList();
 					if (!SelectedModOrder.IsModSettings)
 					{
 						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(exportedEntries);
