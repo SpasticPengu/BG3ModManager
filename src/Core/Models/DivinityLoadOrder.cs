@@ -292,6 +292,45 @@ public class DivinityLoadOrder : ReactiveObject
 		Order.AddRange(nextOrder.Order);
 	}
 
+	/// <summary>
+	/// Rebuilds the order from the active mods. Entries marked Missing (mods that weren't installed when the order was loaded)
+	/// have no active mod, so they are put back after the entry they followed instead of being dropped.
+	/// </summary>
+	public void UpdateFrom(IEnumerable<DivinityModData> activeMods)
+	{
+		var previousOrder = Order.ToList();
+		Order.Clear();
+		AddRange(activeMods, true);
+
+		if (previousOrder.Any(x => x.Missing))
+		{
+			//File each missing entry under the nearest earlier entry that is still in the order (null = the start)
+			var present = Order.Select(x => x.UUID).ToHashSet();
+			string anchor = null;
+			var missing = new List<(string Anchor, DivinityLoadOrderEntry Entry)>();
+			foreach (var entry in previousOrder)
+			{
+				if (present.Contains(entry.UUID))
+				{
+					anchor = entry.UUID;
+				}
+				else if (entry.Missing)
+				{
+					missing.Add((anchor, entry));
+				}
+			}
+			var missingAfter = missing.ToLookup(x => x.Anchor, x => x.Entry);
+			var rebuilt = Order.ToList();
+			Order.Clear();
+			Order.AddRange(missingAfter[null]);
+			foreach (var entry in rebuilt)
+			{
+				Order.Add(entry);
+				Order.AddRange(missingAfter[entry.UUID]);
+			}
+		}
+	}
+
 	public bool OrderEquals(IEnumerable<string> orderList)
 	{
 		if (Order.Count > 0)

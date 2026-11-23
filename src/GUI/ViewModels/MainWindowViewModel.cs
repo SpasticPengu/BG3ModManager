@@ -2116,6 +2116,7 @@ Directory the zip will be extracted to:
 			if (!DivinityModDataLoader.IgnoreMod(entry.UUID))
 			{
 				var modResult = mods.Lookup(entry.UUID);
+				entry.Missing = !modResult.HasValue;
 				if (modResult.HasValue)
 				{
 					var mod = modResult.Value;
@@ -4883,8 +4884,7 @@ Directory the zip will be extracted to:
 
 		if (SelectedModOrder != null)
 		{
-			SelectedModOrder.Order.Clear();
-			SelectedModOrder.AddRange(ActiveMods, true);
+			SelectedModOrder.UpdateFrom(ActiveMods);
 		}
 	}
 
