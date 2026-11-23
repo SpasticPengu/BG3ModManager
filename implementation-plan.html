@@ -37,6 +37,7 @@
     letter-spacing:.09em;color:var(--muted)}
   nav.toc ol{margin:0;padding-left:20px;columns:2;column-gap:32px}
   nav.toc li{margin:3px 0;break-inside:avoid}
+  a{color:var(--accent)}
   nav.toc a{color:var(--ink);text-decoration:none}
   nav.toc a:hover{color:var(--accent);text-decoration:underline}
   section{background:var(--panel);border:1px solid var(--line);border-radius:12px;
@@ -90,18 +91,85 @@
 <header class="hero">
   <div class="inner">
     <h1>BG3 Mod Manager — Fork Implementation Plan</h1>
-    <p>Detailed reference for the SpasticPengu fork: ten stages, ordered so that
+    <p>Detailed reference for the SpasticPengu fork: ten numbered stages plus two lettered ones
+       (F: safety fixes found by the review, L: mod library), ordered so that
        anything worth sending upstream is built before anything that can't be.</p>
     <div class="meta">
-      <span>Base: <strong>upstream/master</strong> (WPF, .NET 8)</span>
-      <span>Fork commits: <strong>2</strong> (fix/publish-prebuild-quoting)</span>
-      <span>Current stage: <strong>0 — complete, in testing</strong></span>
-      <span>Drafted 2026-09-21 · updated 2026-09-23 (Stage 0 results)</span>
+      <span>Base: <strong>upstream/master</strong> (WPF, .NET 8, out of support since 2026-11-10)</span>
+      <span>Fork work: <strong>15 commits</strong> on 2 branches, none on master</span>
+      <span>Status: <strong>Stage 6.1 paused; review folded in</strong></span>
+      <span>Drafted 2026-09-21 · updated 2026-11-23 (cloud review + local re-check)</span>
     </div>
   </div>
 </header>
 
 <div class="wrap">
+
+<section id="resume" style="border:2px solid var(--accent)">
+  <h2>Resume here <span class="pill" style="background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)">2026-11-23</span></h2>
+  <p>Read this box first, then <a href="#review">the review section</a>, then the stage you are
+     working on. Repo facts are in <code>CLAUDE.md</code>.</p>
+
+  <h3>Where things stand</h3>
+  <table>
+    <tr><th>Item</th><th>State</th></tr>
+    <tr><td>Stage 0 (toolchain)</td>
+        <td>Done 2026-09-23. The 0.2 fix is on <code>fix/publish-prebuild-quoting</code> (pushed to
+            <code>origin</code>, no upstream PR yet). 0.2a and 0.2b, the clean-clone traps, are not cut.
+            New: .NET 8 left support on 2026-11-10, and restore and build run on different SDKs
+            (see <a href="#stage0">Stage 0</a>).</td></tr>
+    <tr><td>Stage 6.1 (list scrolling)</td>
+        <td>In progress on <code>perf/list-render</code>, paused since 2026-09-23 and pushed to
+            <code>origin</code>. Name cell done: 90% cheaper per row, frames 24% cheaper. 5 real
+            commits, 8 to drop before a PR. Next steps are in 6.1.</td></tr>
+    <tr><td>Cloud review</td>
+        <td>Run 2026-11-03 on branch <code>kk/laughing-pascal-710otn</code> (<code>docs/review/</code>),
+            re-checked locally 2026-11-23: 81 claims, 57 confirmed, 19 partly right, 4 refuted,
+            1 needs a runtime test. It found about 20 upstreamable bugs the plan did not know about,
+            several of them data loss or crashes. Folded into <a href="#review">the review section</a>,
+            <a href="#stageF">Stage F</a> and the stages below.</td></tr>
+    <tr><td>Everything else</td>
+        <td>Stages 1-5 and 6.2-9 are not started. The review wrote designs for most of them
+            (linked from each stage) and a new <a href="#stageL">Stage L</a> for the mod library you
+            asked for on 2026-11-03.</td></tr>
+  </table>
+
+  <h3>Next steps (proposed order)</h3>
+  <ol>
+    <li><strong>Stage F safety fixes</strong>, each a small <code>fix/*</code> branch from clean
+        <code>master</code>: dependency-cycle crash, hotkey crash, missing mods dropped on Save,
+        the export-to-game rewrite, the restore prompt, the <code>modsettings.lsx</code> write guard,
+        settings restore, silent background errors, updater errors. Then Stages 2 and 3 with their
+        revised bug lists.</li>
+    <li><strong>Two Windows measurements before any perf work:</strong> a thread-id and timing log
+        through <code>RefreshAsync</code> (settles whether loading runs on the UI thread and who owns
+        the unattributed ~6.5&nbsp;s, see <a href="#stage4">Stage 4</a>), and the Stage 5 Step 0
+        control run (see <a href="#stage5">Stage 5</a>).</li>
+    <li><strong>Finish 6.1:</strong> the other four text cells, <code>ScrollUnit="Pixel"</code>, drop
+        the TEMP commits, hand-resolve <code>309b81ef</code>, PR.</li>
+    <li><strong>Stage 1</strong> before any build is shared with friends.</li>
+  </ol>
+
+  <h3>Decisions waiting on you</h3>
+  <ul class="tight">
+    <li>Stage F: accept it, and put it before Stage 2 (proposed) or after Stage 6.1?</li>
+    <li>Stage L: accept the library design (after 6.2, before 8, fork-only)?</li>
+    <li>.NET 10: when to move. It needs Build Tools 2026 (VS 18) installed first.</li>
+    <li>Stage 1 choices listed in the review's <code>stages/S1.md</code> §8 (CalVer versions, release CI,
+        ko-fi links); Stage 5 fuzzy search on the active list (<code>S5-final.md</code> §6.4, §11);
+        Stage 6.2/6.3 open questions (<code>S6-final.md</code> §14).</li>
+    <li>Whether <code>docs/review/</code> stays on its own branch or moves to <code>notes</code>.</li>
+  </ul>
+
+  <h3>Housekeeping facts</h3>
+  <ul class="tight">
+    <li><code>CLAUDE.md</code>, this plan and the retired <code>plan-overview.html</code> are excluded
+        from git locally (<code>.git/info/exclude</code>). Copies live on the orphan <code>notes</code>
+        branch so cloud sessions can read them; commit both there after each update.</li>
+    <li>The review's designs cite <code>master</code> = <code>fc35358</code> line numbers. Upstream has not
+        moved since (checked 2026-11-23).</li>
+  </ul>
+</section>
 
 <nav class="toc">
   <h2>Contents</h2>
@@ -109,13 +177,16 @@
     <li><a href="#goal">Goal and scope</a></li>
     <li><a href="#decisions">Decisions taken</a></li>
     <li><a href="#git">Git strategy</a></li>
+    <li><a href="#review">Codebase review (2026-11) and re-check</a></li>
     <li><a href="#stage0">Stage 0 — Toolchain &amp; first build</a></li>
     <li><a href="#stage1">Stage 1 — Fork identity &amp; safety</a></li>
+    <li><a href="#stageF">Stage F: safety fixes from the review</a></li>
     <li><a href="#stage2">Stage 2 — Zip export corruption</a></li>
     <li><a href="#stage3">Stage 3 — Archive import losses</a></li>
     <li><a href="#stage4">Stage 4 — Perf A: startup load</a></li>
     <li><a href="#stage5">Stage 5 — Perf B: filter &amp; search</a></li>
     <li><a href="#stage6">Stage 6 — The list workstream</a></li>
+    <li><a href="#stageL">Stage L: mod library and per-order deployment</a></li>
     <li><a href="#stage7">Stage 7 — UI/UX refresh</a></li>
     <li><a href="#stage8">Stage 8 — Multi-order export</a></li>
     <li><a href="#stage9">Stage 9 — Ambitious set</a></li>
@@ -130,11 +201,14 @@
      but published publicly. Four workstreams, in the owner's words:</p>
   <ul class="tight">
     <li><strong>Bugfixes</strong> — zip export is inconsistent/corrupting; importing order and mods
-        from an archive loses mods and/or the order.</li>
+        from an archive loses mods and/or the order. Since 2026-11: also the crash and order-loss
+        bugs the review found (<a href="#stageF">Stage F</a>).</li>
     <li><strong>Performance</strong> — slow initial load with many mods, slow scrolling, slow filtering.</li>
     <li><strong>UI</strong> — dated appearance, UX improvements.</li>
     <li><strong>Features</strong> — multi-order export, categories/dividers, overrides folded into the
-        load order; later, a downloader, order syncing with friends, and native-mod management.</li>
+        load order; later, a downloader, order syncing with friends, and native-mod management.
+        Added 2026-11-03: a mod library that keeps every version, pins versions per order and
+        deploys by hardlink (<a href="#stageL">Stage L</a>).</li>
   </ul>
   <div class="callout">
     <p><strong>All repo facts referenced here are in <code>CLAUDE.md</code> at the repo root.</strong>
@@ -217,8 +291,83 @@ fork/main                  ← the fork's own line; merges master + fork-only wo
   </div>
 </section>
 
+<section id="review">
+  <h2><span class="num">4</span>Codebase review (2026-11) and re-check</h2>
+  <p>On 2026-11-03 a cloud session ran a read-only, multi-agent review of <code>master</code>,
+     <code>perf/list-render</code>, <code>fix/publish-prebuild-quoting</code> and upstream
+     <code>avalonia</code>, checked against <code>CLAUDE.md</code> and this plan. It lives on branch
+     <code>kk/laughing-pascal-710otn</code> under <code>docs/review/</code> (start at
+     <code>README.md</code>). Its budget ran out part-way. On 2026-11-23 seven local agents re-checked
+     it against <code>master</code>; the result is
+     <code>docs/review/verified/LOCAL-RECHECK-2026-11-23.md</code> on the same branch. Neither pass
+     built or ran the app: every finding is traced from code and library sources, not reproduced.</p>
+
+  <table>
+    <tr><th>Part</th><th>How far to trust it</th></tr>
+    <tr><td><code>verified/*</code> ledgers</td>
+        <td>Re-checked: 57 ledger claims, plus this plan's own E1-E5 and I1-I5 and two local
+            toolchain facts. Of those 69: 46 confirmed, 18 partly right (corrections recorded),
+            4 refuted, 1 needs a runtime test.</td></tr>
+    <tr><td><code>areas/LOAD, SVC, VM1, VM2, UI</code></td>
+        <td>Never verified by the cloud. The re-check verified their 12 High findings (11 confirmed,
+            1 partly right); they feed <a href="#stageF">Stage F</a>. Their ~80 Medium and Low findings
+            are still leads; titles are in the re-check report.</td></tr>
+    <tr><td><code>stages/*</code>, <code>areas/AVA.md</code>, <code>areas/BLD.md</code></td>
+        <td>Designs judged by panels, not decisions. Each is linked from its stage below.</td></tr>
+    <tr><td><code>claude-md/</code></td>
+        <td>Proposed CLAUDE.md corrections; the ones that held up were applied on 2026-11-23.</td></tr>
+    <tr><td>Missing</td>
+        <td>A review of the 6.1 branch, a Stage 2-3 fix spec and a roadmap v2 (this update stands in
+            for the last).</td></tr>
+  </table>
+
+  <h3>Design index</h3>
+  <table>
+    <tr><th>File (under <code>docs/review/</code>)</th><th>What</th><th>Stage</th></tr>
+    <tr><td><code>stages/S1.md</code></td><td>Fork identity: update URLs, CalVer versions, an
+        <code>Update.xml</code> checksum, release CI on <code>windows-2022</code>, a pre-release
+        checklist; decisions in §8</td><td><a href="#stage1">1</a></td></tr>
+    <tr><td><code>stages/S4-final.md</code></td><td>Startup: measure, loading off the UI thread,
+        bounded parallelism, a facts cache, an R1 snapshot harness</td><td><a href="#stage4">4</a></td></tr>
+    <tr><td><code>stages/S5-final.md</code></td><td>Filter: a probe first, collection-view filtering,
+        drops mapped by item, throttle last; fork-only fuzzy search (prototype in
+        <code>prototypes/fuzzy-search/</code>)</td><td><a href="#stage5">5</a></td></tr>
+    <tr><td><code>stages/S6-final.md</code></td><td>Overrides block and dividers: flat rows, a versioned
+        <code>Layout</code> member in the order JSON, the write-guard PR first</td>
+        <td><a href="#stage6">6.2, 6.3</a></td></tr>
+    <tr><td><code>stages/LIB-final.md</code></td><td>Mod library, version pins, hardlink deployment</td>
+        <td><a href="#stageL">L</a></td></tr>
+    <tr><td><code>stages/S7.md</code>, <code>S8.md</code>, <code>S9.md</code></td><td>UI refresh within
+        AdonisUI; multi-order bundles and friend sync; Nexus, mod.io and native-mod skeletons</td>
+        <td><a href="#stage7">7</a>, <a href="#stage8">8</a>, <a href="#stage9">9</a></td></tr>
+    <tr><td><code>areas/AVA.md</code></td><td>Upstream avalonia: it carries most of E1-E6 and I1-I5 too.
+        Advice: stay on WPF, test under Proton, later a cross-platform Core plus a CLI</td>
+        <td><a href="#decisions">Decisions</a></td></tr>
+    <tr><td><code>areas/BLD.md</code></td><td>Dependency audit, the .NET 10 migration, CI YAML,
+        line-ending policy</td><td><a href="#stage0">0</a></td></tr>
+  </table>
+
+  <h3>What changed in this plan</h3>
+  <ul class="tight">
+    <li>New <a href="#stageF">Stage F</a>: confirmed crash, order-loss, settings and security bugs,
+        proposed before Stage 2.</li>
+    <li><a href="#stage0">Stage 0</a>: .NET 8 out of support, an SDK mismatch, three more build traps;
+        the 58 <code>MeasureText</code> exceptions are not caused by <code>=</code> dividers.</li>
+    <li><a href="#stage2">Stage 2</a>: E1 to E4 narrowed or corrected, E6 dropped, four new export defects.</li>
+    <li><a href="#stage3">Stage 3</a>: I1 refuted; the real silent order loss is importing a
+        "Current" order; five new import defects.</li>
+    <li><a href="#stage4">Stage 4</a>: loading runs on the UI thread; about 6.5&nbsp;s of the 9.27&nbsp;s
+        is unattributed; no MD5 anywhere.</li>
+    <li><a href="#stage5">Stage 5</a>: steps 1 and 2 save nothing; filtered drops are safe,
+        column-sorted drops are not.</li>
+    <li><a href="#stage6">Stage 6</a>: the 6.1 branch is pushed; 6.2 and 6.3 get the S6-final design.</li>
+    <li>New <a href="#stageL">Stage L</a>; four new <a href="#risks">risks</a>; revised
+        <a href="#verify">verification</a>.</li>
+  </ul>
+</section>
+
 <section id="stage0">
-  <h2><span class="num">4</span>Stage 0 &mdash; Toolchain &amp; first build</h2>
+  <h2><span class="num">5</span>Stage 0 &mdash; Toolchain &amp; first build</h2>
 
   <div class="callout good">
     <p><strong>Status 2026-09-23 &mdash; complete, ready to verify.</strong>
@@ -231,6 +380,31 @@ fork/main                  ← the fork's own line; merges master + fork-only wo
     <p>Two blockers were found that no earlier document mentions: <strong>0.2b</strong>, which stops a
        clean checkout from producing a release at all, and the <strong>filter-latency finding</strong>
        in 0.3, which changes the premise of Stage&nbsp;5.</p>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>Update 2026-11-23 (review BLD-01 to BLD-08, re-checked on this machine).</strong></p>
+    <ul class="tight">
+      <li><strong>.NET 8 and .NET 9 reached end of support on 2026-11-10.</strong> Nothing breaks, but
+          no more security fixes (the final .NET 8 patch is 8.0.34; this machine runs desktop runtime
+          8.0.31). Upstream <code>avalonia</code> already targets <code>net10.0</code>.</li>
+      <li><strong>This machine cannot target <code>net10.0</code> yet.</strong> Its only Visual Studio
+          instance is Build Tools 2022 17.14, and the 10.0.4xx SDK needs MSBuild 18 (Build Tools 2026 /
+          VS 18). Installing that is step one of any .NET 10 move.</li>
+      <li><strong>Restore and build use different SDKs.</strong> <code>dotnet restore</code> resolves
+          10.0.400; <code>msbuild</code> 17.14 cannot load it and falls back to 9.0.318. Both target
+          net8, so nothing breaks, but analyzers and NuGet differ between the steps. A
+          <code>global.json</code> would pin one SDK.</li>
+      <li><code>Publish|Any CPU</code> and <code>PublishTest|Any CPU</code> build LSLib, LSLibNative and
+          LSLibStats in <strong>Debug</strong>, so a release could ship a debug-CRT native DLL. Always
+          pass <code>-p:Platform=x64</code> (BLD-04).</li>
+      <li><code>LSLibStats</code> is built in every configuration, used by nothing, and carries a second
+          copy of the 0.2a parser trap (BLD-05).</li>
+      <li>The release zip is built from an uncleaned <code>bin\Publish</code>, with error-swallowing
+          deletes and no check of its contents (BLD-08).</li>
+      <li><code>LSLibNative</code> (C++/CLI) is what blocks <code>dotnet build</code>, a cheap CI and
+          Linux; upstream <code>avalonia</code> replaced it with managed code (BLD-06).</li>
+    </ul>
   </div>
 
   <div class="stage">
@@ -469,12 +643,15 @@ MSBuild log:   8&gt;PreBuildEvent:
          on the UI path is not free and the names that trigger it &mdash; divider entries made of
          <code>=</code> characters, and non-Latin titles &mdash; are ordinary in a 900-mod order.
          Candidate work for Stage 6.</p>
+      <p><strong>Corrected 2026-11-23 (CLAIM-06):</strong> <code>=</code> does not throw. The misses come
+         from characters the font lacks (non-Latin scripts, emoji) in the longest names, which are the
+         ones the autosizer measures.</p>
     </div>
   </div>
 </section>
 
 <section id="stage1">
-  <h2><span class="num">5</span>Stage 1 — Fork identity &amp; safety</h2>
+  <h2><span class="num">6</span>Stage 1 — Fork identity &amp; safety</h2>
   <div class="stage">
     <h3>Repoint the updater <span class="pill fork">FORK-ONLY</span>
         <span class="branch">chore/fork-identity</span></h3>
@@ -496,15 +673,187 @@ MSBuild log:   8&gt;PreBuildEvent:
     </ul>
     <p><strong>Verify:</strong> with a deliberately low <code>AssemblyVersion</code>, the updater
        offers <em>your</em> release, not upstream's.</p>
+    <div class="callout">
+      <p><strong>Review design: <code>docs/review/stages/S1.md</code>.</strong> CalVer
+         <code>YYYY.M.D.N</code> versions with a bump script and a CI guard over the four version files,
+         the update feed published as a release asset, an <code>Update.xml</code> checksum, a release
+         workflow on <code>windows-2022</code> for <code>fork/main</code>, and a pre-release checklist.
+         Its §8 lists the decisions it needs from you.</p>
+      <p><strong>Confirmed updater bugs</strong> (fixed in <a href="#stageF">Stage F</a>, upstreamable):
+         a failed update check reports "up to date", and cancelling or failing the download closes the
+         app through an unconditional <code>Environment.Exit(0)</code> (CLAIM-16, HARV-01, HARV-02).
+         The feed is trusted with no checksum (HARV-04, low).</p>
+    </div>
   </div>
 </section>
 
+<section id="stageF">
+  <h2><span class="num">7</span>Stage F: safety fixes from the review</h2>
+  <p><span class="pill up">UPSTREAMABLE</span>
+     <span class="branch">one fix/* branch per row, each cut from clean master</span></p>
+  <div class="callout bad">
+    <p><strong>Proposed 2026-11-23, not yet accepted (see Resume here).</strong> Every bug below is in
+       upstream <code>master</code> today. Each was confirmed by reading the code, none has been
+       reproduced, and most are a few lines to fix. Several lose load orders silently, which is why
+       this stage is proposed before Stage 2. <strong>Back up <code>modsettings.lsx</code> and the
+       <code>Orders</code> folder before testing any of them</strong>, and start each branch with a
+       Windows repro or an instrumented PASS/FAIL check.</p>
+  </div>
+  <table>
+    <tr><th>Branch (proposed)</th><th>Bug, as a user sees it</th><th>Where (<code>master</code>)</th><th>Fix sketch</th></tr>
+    <tr><td><code>fix/dependency-cycle</code></td>
+        <td>Save or Export closes the app with no message when an active mod lists itself as a
+            dependency, or two mods list each other (stack overflow). On by default through
+            <code>AutoAddDependenciesWhenExporting</code>. LOAD-02, VM2-05.</td>
+        <td><code>DivinityModDataLoader.cs:1400-1429</code>: <code>GetDependencyMods</code> recurses before
+            marking a mod as added.</td>
+        <td>Mark visited before recursing. Worth a one-off scan of your 1,121 mods to see whether any
+            trigger it.</td></tr>
+    <tr><td><code>fix/hotkey-validation</code></td>
+        <td>A hotkey rebound to a plain letter or digit works until restart, then every launch crashes
+            ("The program will close") until <code>keybindings.json</code> is fixed by hand. UI-01.</td>
+        <td><code>HotkeyEditorControl.xaml.cs:64-121</code> accepts it;
+            <code>MainViewControl.xaml.cs:37</code> builds a <code>KeyBinding</code>, whose
+            <code>KeyGesture</code> rejects it at the next start.</td>
+        <td>Reject invalid gestures in the editor; on load, skip and report them instead of
+            throwing.</td></tr>
+    <tr><td><code>fix/order-keep-missing</code></td>
+        <td>Saving an order while some of its mods are missing deletes those mods from the saved
+            order. VM2-01.</td>
+        <td><code>MainWindowViewModel.cs:4880-4889</code> rebuilds <code>Order</code> from the loaded mods
+            250&nbsp;ms after any list change (<code>:5400-5408</code>) and on every Save
+            (<code>:2601</code>) and Export (<code>:2899</code>).</td>
+        <td>Keep missing entries in place when rebuilding. 6.2, 6.3 and Stage L need this too: any
+            per-entry field is wiped the same way (CLAIM-09).</td></tr>
+    <tr><td><code>fix/export-to-game</code></td>
+        <td>Export overwrites <code>modsettings.lsx</code> with no backup, then overwrites the
+            LastExported backup even when the write failed (VM2-04). On a fresh setup the first Save or
+            Export of Current switches to another saved order and copies it into Current (VM2-02), and
+            can leave the app locked until restart (VM2-03).</td>
+        <td><code>DivinityModDataLoader.cs:1331-1364</code>;
+            <code>MainWindowViewModel.cs:2841-2985</code>, <code>BackupCurrentLoadOrderAsync</code> at
+            <code>:2850-2873</code>.</td>
+        <td>One rewrite: run on the UI thread, write through a temp file and rename while keeping a
+            <code>.bak</code>, back up LastExported only after success, and never route the backup
+            through <code>AddNewModOrder</code>.</td></tr>
+    <tr><td><code>fix/restore-prompt</code></td>
+        <td>After a game patch empties the list, answering Yes to "use the last exported order?" can
+            empty the LastExported backup and write a <code>modsettings.lsx</code> holding only the
+            campaign. VM1-01. All profiles also share one LastExported (HARV-54).</td>
+        <td><code>MainWindowViewModel.cs:2291-2327</code> copies into the first saved order, which can be
+            LastExported itself; <code>SetOrder</code> on itself clears it
+            (<code>DivinityLoadOrder.cs:289-293</code>).</td>
+        <td>Restore into Current; never <code>SetOrder</code> an order into itself; one backup per
+            profile.</td></tr>
+    <tr><td><code>fix/modsettings-write-guard</code></td>
+        <td>A meta-less override pak (its UUID is its file path) can be written into
+            <code>modsettings.lsx</code>; the next read throws and the whole order comes back empty
+            (CLAIM-15, HARV-52). One unparseable entry blanks the file the same way (HARV-53).</td>
+        <td><code>BuildOutputList</code>, <code>GenerateModSettingsFile</code>,
+            <code>LoadModSettingsFileAsync</code> in <code>DivinityModDataLoader.cs</code>.</td>
+        <td>Never write a non-GUID UUID; read back after writing; skip a bad entry on read instead of
+            failing the file. This is S6-final's PR-0 and a hard prerequisite of Stage L.</td></tr>
+    <tr><td><code>fix/settings-restore</code></td>
+        <td>Window size and position, and the admin-warning opt-out, reset on every launch. CLAIM-10,
+            caused by upstream <code>7b57e5a</code>.</td>
+        <td><code>MainWindowViewModel.cs:1127</code> restores only <code>[Reactive]</code> properties;
+            <code>Window</code> and <code>Confirmations</code>
+            (<code>DivinityModManagerSettings.cs:112, :122</code>) have none, and <code>SaveSettings</code>
+            then writes the defaults back.</td>
+        <td>Copy both objects' fields in place after <code>:1127</code>. Never reassign them
+            (CLAUDE.md §4).</td></tr>
+    <tr><td><code>fix/background-errors</code></td>
+        <td>Any exception inside an <code>RxApp.TaskpoolScheduler.ScheduleAsync</code> body is
+            swallowed; one in <code>RefreshAsync</code> leaves "Loading..." up with every button
+            disabled until restart. VM1-02.</td>
+        <td>System.Reactive 6.0.1's <code>ScheduleAsync</code>; 15 sites in
+            <code>MainWindowViewModel.cs</code>.</td>
+        <td>A small helper that catches, calls <code>ShowAlert</code>, and resets
+            <code>IsRefreshing</code> / <code>IsLoadingOrder</code> in a <code>finally</code>.</td></tr>
+    <tr><td><code>fix/updater-errors</code></td>
+        <td>A failed update check says "up to date"; cancelling or failing the update download closes
+            the app. CLAIM-16, HARV-01, HARV-02.</td>
+        <td><code>AppUpdateWindowViewModel.cs</code>; <code>TryRunUpdate</code> calls
+            <code>Environment.Exit(0)</code> whatever happened.</td>
+        <td>Report the failure; exit only after a successful download.</td></tr>
+    <tr><td><code>fix/path-containment</code></td>
+        <td><strong>Security, needs a crafted mod.</strong> A compressed pak import
+            (<code>.bz2/.xz/.zst</code>) names its output from the mod's own <code>meta.lsx</code>
+            Folder, so it can truncate or replace <code>.pak</code> files outside Mods (SVC-01).
+            Extract Selected Mods writes pak entry names with no containment check, so <code>..</code>
+            escapes the chosen folder (VM2-06).</td>
+        <td><code>MainWindowViewModel.cs:3294-3301</code>; extraction in
+            <code>External/lslib/LSLib/LS/PackageCommon.cs:162</code> (submodule).</td>
+        <td><code>Path.GetFileName</code> on the derived name; a containment check before each extracted
+            write (the lslib half is a submodule PR).</td></tr>
+    <tr><td><code>fix/duplicate-dialog-larian</code></td>
+        <td>If a mod reuses a Larian module's UUID, the startup duplicate dialog can tick the game's own
+            <code>Game.pak</code> or <code>Gustav.pak</code> for deletion; confirming recycles it where
+            the folder is writable (usually Steam, usually not GOG under Program Files). LOAD-01: offering
+            Data-folder copies is intended, offering Larian paks is the bug.</td>
+        <td><code>MainWindowViewModel.cs:1694-1709</code>.</td>
+        <td>Exclude Larian and multi-module Data paks from that rule.</td></tr>
+  </table>
+
+  <h4>Lower priority, same family (confirmed)</h4>
+  <ul class="tight">
+    <li>Drops into a column-sorted active list land at the sorted position, not the load-order one
+        (HARV-71).</li>
+    <li>Duplicates with equal versions get an arbitrary winner, and the losers are pre-ticked for
+        deletion (HARV-63).</li>
+    <li>Saved order JSON files are rewritten in place, so a crash mid-write empties them (HARV-62).</li>
+    <li>Menu shortcut labels go stale after a rebind (HARV-08). Tab is captured by the
+        <code>SwapListFocus</code> hotkey in the main window; Shift+Tab still works (HARV-10, needs a
+        runtime test).</li>
+    <li>The Script Extender updater writes <code>DWrite.dll</code> in place, so a cancel or a
+        decompression failure can truncate it (HARV-47).</li>
+    <li>The screen-reader probe runs 3-4 times per mod during load (CLAIM-08; cost unmeasured, probably
+        small).</li>
+  </ul>
+  <h4>Unverified leads worth a look first</h4>
+  <p>From the area reports' Medium findings, not yet checked: the <code>modsettings.lsx</code> watcher is
+     disabled for good after the first Save of Current (SVC-04); saving Script Extender updater settings
+     runs Toolbox on the UI thread for up to 120&nbsp;s (SVC-08, VM1-03); a missing or unreadable
+     <code>settings.json</code> makes startup overwrite <code>keybindings.json</code> with
+     <code>{}</code> (VM1-05); Import Order from <code>.json</code> creates a nameless order (VM2-09).
+     The full list is in the re-check report.</p>
+  <p>Import and zip-export bugs stay in <a href="#stage2">Stage 2</a> and <a href="#stage3">Stage 3</a>.</p>
+</section>
+
 <section id="stage2">
-  <h2><span class="num">6</span>Stage 2 — Zip export corruption</h2>
+  <h2><span class="num">8</span>Stage 2 — Zip export corruption</h2>
   <p><span class="pill up">UPSTREAMABLE</span>
      <span class="branch">fix/zip-export-corruption</span> — all in
      <code>src/GUI/ViewModels/MainWindowViewModel.cs</code>, i.e. <code>src/GUI</code>, so a future
      Avalonia port would carry the logic but not the file.</p>
+
+  <div class="callout warn">
+    <p><strong>Review update 2026-11-23.</strong> E1 to E6 were re-checked against the code:</p>
+    <table>
+      <tr><th>Defect</th><th>Verdict</th><th>Correction</th></tr>
+      <tr><td>E1</td><td>Real, narrower</td><td>Only <em>Export As</em> over an existing, larger zip hits
+          it. A plain Export never does, so it explains "sometimes corrupt" only for that path.</td></tr>
+      <tr><td>E2</td><td>Real, overstated</td><td>The catch is at <code>:3679-3683</code>. "Very likely the
+          real cause" of missing mods is unproven: scanned paks rarely fail to open. Other confirmed
+          causes: split paks are never exported (HARV-25) and Stage 3's import losses.</td></tr>
+      <tr><td>E3</td><td>Real, different</td><td>A cancel between mods leaves a valid but incomplete zip
+          and no message. A cancel during a write races the abandoned writer against
+          <code>ZipWriter.Dispose</code> and corrupts the zip (AUDIT-PLAN-03).</td></tr>
+      <tr><td>E4</td><td>Real, smaller</td><td>Lines <code>:3670-3691</code>; it is one pool thread
+          spinning. The proposed <code>Task.Run</code> fix alone does not stop a write already in
+          flight: cancellation must wait for it (or abort it) before the <code>ZipWriter</code> is
+          disposed, or the E3 race remains.</td></tr>
+      <tr><td>E5</td><td>Confirmed</td><td>As written.</td></tr>
+      <tr><td>E6</td><td>Moot</td><td>The infinite value is never used (CLAIM-02). Dropped.</td></tr>
+    </table>
+    <p><strong>New export defects (confirmed):</strong> the planned "collect failures and continue" fix
+       would still ship a truncated pak when a read fails mid-copy, because SharpCompress finalises the
+       partial entry as valid (AUDIT-PLAN-05); split multi-part paks (<code>Foo_1.pak</code>, ...) are
+       never exported (HARV-25); the JSON text export writes the full Windows path, user name included,
+       of meta-less override paks (HARV-26). <strong>Seen, not verified:</strong>
+       <code>canStartExport</code> is always true, so a second export can start while one runs
+       (<code>:5006</code>); there is no zip64, so a pak of 4&nbsp;GiB or more breaks the archive.</p>
+  </div>
 
   <figure>
     <svg viewBox="0 0 900 250" role="img" aria-label="Export pipeline with four failure points">
@@ -562,7 +911,7 @@ MSBuild log:   8&gt;PreBuildEvent:
   </figure>
 
   <div class="bug">
-    <div class="id">E1 — corrupt archive on overwrite <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="id">E1 — corrupt archive on overwrite <span class="conf hi">HIGH CONFIDENCE</span> <span class="conf med">NARROWED 2026-11</span></div>
     <div class="loc">MainWindowViewModel.cs:3579</div>
     <pre><code>using (var stream = File.OpenWrite(outputPath))</code></pre>
     <p><code>File.OpenWrite</code> uses <code>FileMode.OpenOrCreate</code> — it <strong>does not
@@ -576,7 +925,7 @@ MSBuild log:   8&gt;PreBuildEvent:
   </div>
 
   <div class="bug">
-    <div class="id">E2 — mods silently missing from the zip <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="id">E2 — mods silently missing from the zip <span class="conf hi">HIGH CONFIDENCE</span> <span class="conf med">REVISED 2026-11</span></div>
     <div class="loc">MainWindowViewModel.cs:3660-3670, inside WriteZipAsync</div>
     <pre><code>catch (Exception)
 {
@@ -593,7 +942,7 @@ MSBuild log:   8&gt;PreBuildEvent:
   </div>
 
   <div class="bug">
-    <div class="id">E3 — cancellation leaves a partial zip <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="id">E3 — cancellation leaves a partial zip <span class="conf hi">HIGH CONFIDENCE</span> <span class="conf med">REVISED 2026-11</span></div>
     <div class="loc">MainWindowViewModel.cs:3593</div>
     <p><code>if (t.IsCancellationRequested) return false;</code> returns from inside the
        <code>using</code>. The stream disposes and a truncated zip is left on disk, never deleted.
@@ -602,7 +951,7 @@ MSBuild log:   8&gt;PreBuildEvent:
   </div>
 
   <div class="bug">
-    <div class="id">E4 — busy-wait during export <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="id">E4 — busy-wait during export <span class="conf hi">HIGH CONFIDENCE</span> <span class="conf med">REVISED 2026-11</span></div>
     <div class="loc">MainWindowViewModel.cs:3675-3685</div>
     <pre><code>var childTask = Task.Factory.StartNew(..., TaskCreationOptions.AttachedToParent);
 var awaiter = childTask.GetAwaiter();
@@ -628,7 +977,7 @@ while (!awaiter.IsCompleted)
   </div>
 
   <div class="bug">
-    <div class="id">E6 — division by zero <span class="conf hi">HIGH</span> (cosmetic)</div>
+    <div class="id">E6 — division by zero <span class="conf hi">HIGH</span> (cosmetic) <span class="conf lo">MOOT 2026-11: DROPPED</span></div>
     <div class="loc">MainWindowViewModel.cs:3574</div>
     <p><code>1d / modPaks.Count</code> is <code>Infinity</code> when the order is empty. Guard it.</p>
   </div>
@@ -643,13 +992,56 @@ while (!awaiter.IsCompleted)
 </section>
 
 <section id="stage3">
-  <h2><span class="num">7</span>Stage 3 — Archive import losses</h2>
+  <h2><span class="num">9</span>Stage 3 — Archive import losses</h2>
   <p><span class="pill up">UPSTREAMABLE</span>
      <span class="branch">fix/archive-import</span> — <code>ImportArchiveAsync</code>,
      <code>MainWindowViewModel.cs:3390-3524</code>.</p>
 
+  <div class="callout warn">
+    <p><strong>Review update 2026-11-23: I1 is refuted.</strong> SharpCompress 0.39's zip entry streams
+       (stored and deflate) fill the buffer in one read; a short read only happens on a corrupt entry.
+       Keep a <code>ReadExactly</code> as hygiene, but it is not why orders vanish. The silent order
+       losses that are real (confirmed):</p>
+    <ul class="tight">
+      <li><strong>Importing an order named "Current"</strong>, i.e. any archive exported while Current was
+          selected. With a saved order selected, the import is discarded and the selected order becomes a
+          copy of Current (<code>:3119-3125</code>); otherwise Current flips to a non-modsettings order,
+          so a later Save writes JSON into <code>modsettings.lsx</code> and Export to Game throws
+          (AUDIT-PLAN-01, HARV-31).</li>
+      <li>An imported order with the same name as a saved one overwrites that order's file on the next
+          save, without asking (HARV-32).</li>
+      <li>Two order JSONs with the same base name in one archive: the second is lost (HARV-29).</li>
+      <li>Zips from third-party streaming writers report <code>Size=0</code> for entries written with a
+          data descriptor, so the order JSON reads as empty (CLAIM-01). The manager's own exports are not
+          affected.</li>
+    </ul>
+    <p><strong>Other import defects (confirmed):</strong></p>
+    <ul class="tight">
+      <li>All three pak import paths truncate the destination in place
+          (<code>MainWindowViewModel.cs:1845, 3302, 3429</code>), so a cancel or an error destroys the
+          installed mod (HARV-61, AUDIT-PLAN-04). Fix: write to a temp file, then rename. Stage L depends
+          on this.</li>
+      <li><code>.bz2/.xz/.zst</code> imports write a 0-byte pak and report success, because the temp copy
+          already drained the stream (AUDIT-PLAN-02). The same path has a security hole, fixed in
+          <a href="#stageF">Stage F</a> (SVC-01).</li>
+      <li>Archives of 2&nbsp;GiB or more can't be imported: I3's throwaway read fails with
+          <code>OutOfMemoryException</code> at <code>new byte[Length]</code> before the cast matters
+          (HARV-27). The same two lines also sit in <code>ImportCompressedFileAsync</code> and
+          <code>LoadResourceAsync</code>.</li>
+      <li>Importing a mod replaces the installed one with the same UUID even when the import is older
+          (HARV-33).</li>
+      <li>I2 and I5 are confirmed as written. I4: the acceptance half is confirmed; the solid-archive
+          slowness needs a timing test. Side note: <code>.tar.gz</code> can never match in
+          <code>AddModFromFile</code>, because <code>Path.GetExtension</code> returns
+          <code>.gz</code>.</li>
+    </ul>
+    <p><strong>Suggested split:</strong> one branch for pak writes (temp then rename, with HARV-33's
+       version check as the overwrite policy) and one for order naming (AUDIT-PLAN-01, HARV-31, HARV-32,
+       HARV-29). Both are upstreamable.</p>
+  </div>
+
   <div class="bug">
-    <div class="id">I1 — the load order is silently lost <span class="conf hi">HIGH CONFIDENCE</span></div>
+    <div class="id">I1 — the load order is silently lost <span class="conf hi">HIGH CONFIDENCE</span> <span class="conf lo">REFUTED 2026-11: SEE ABOVE</span></div>
     <div class="loc">MainWindowViewModel.cs:3457-3462</div>
     <pre><code>int length = (int)file.Size;
 var result = new byte[length];
@@ -680,7 +1072,7 @@ string text = Encoding.UTF8.GetString(result);</code></pre>
   </div>
 
   <div class="bug">
-    <div class="id">I3 — whole archive read into a throwaway buffer <span class="conf hi">HIGH</span></div>
+    <div class="id">I3 — whole archive read into a throwaway buffer <span class="conf hi">HIGH</span> <span class="conf med">REVISED 2026-11</span></div>
     <div class="loc">MainWindowViewModel.cs:3411</div>
     <pre><code>await fileStream.ReadAsync(new byte[fileStream.Length], 0, (int)fileStream.Length);
 fileStream.Position = 0;</code></pre>
@@ -721,13 +1113,41 @@ fileStream.Position = 0;</code></pre>
 </section>
 
 <section id="stage4">
-  <h2><span class="num">8</span>Stage 4 — Perf A: startup load</h2>
+  <h2><span class="num">10</span>Stage 4 — Perf A: startup load</h2>
   <p><span class="pill up">UPSTREAMABLE</span> <span class="branch">perf/startup-load</span> —
      mostly <code>src/Core</code>, so this survives a future Avalonia port.</p>
   <div class="callout">
     <p><strong>Measure first. This stage starts with instrumentation, not optimisation.</strong>
        Your own Facet spec records that the obvious first fix was wrong and only measurement showed
        it. Same rule here.</p>
+  </div>
+  <div class="callout warn">
+    <p><strong>Review update 2026-11-23</strong> (design: <code>docs/review/stages/S4-final.md</code>).</p>
+    <ul class="tight">
+      <li><strong>Loading runs on the UI thread</strong> (CLAIM-07, confirmed by code reading).
+          <code>RefreshAsync</code> starts on the taskpool, but its first await on
+          <code>Observable.Start(..., RxApp.MainThreadScheduler)</code> resumes inline on the dispatcher
+          (System.Reactive 6.0.1's awaiter), so the rest of it, pak loading included, runs there. The hop
+          predates <code>fc35358</code>: <code>SetMainProgressTextAsync</code> already did it. Another ledger
+          (AUDIT-PLAN-06) says the loop runs on the pool; a thread-id log settles it.</li>
+      <li><strong>The pak loop is not most of the 9.27&nbsp;s.</strong> 26 runs already in
+          <code>bin/Debug/_Logs</code> show 1,098 paks loading in 2.46-3.00&nbsp;s, editor projects in
+          0.03&nbsp;s and base-mod parsing in 0.08-0.11&nbsp;s. That last timer starts <em>after</em> the
+          base-game VFS build, so about 6.5&nbsp;s is unattributed, and the VFS build over the 48 Data paks
+          (AUDIT-PLAN-08; it finds 18 base modules on this install) is the likeliest owner. Time it first in
+          4.1.</li>
+      <li><strong>Kill the MD5 candidate:</strong> nothing hashes anything (HARV-63). A side effect:
+          duplicates with equal versions get an arbitrary winner (<a href="#stageF">Stage F</a>, lower
+          priority).</li>
+      <li><code>DivinityModData.Files</code> keeps every entry path of every pak and nothing reads it
+          (AUDIT-PLAN-07, memory). <code>LoadModPackageDataAsync</code>'s <code>dupes</code> is a lazy query
+          re-run per mod: O(n&sup2;), but only milliseconds.</li>
+      <li>S4-final's order: a zero-code first measurement, then loading off the UI thread, then bounded
+          parallelism, then a facts cache keyed by full path + size + mtime + header. It is R1-safe: override
+          and dedupe decisions are re-made on every load. Its estimate (1.5-5&nbsp;s cold, 0.4-1.2&nbsp;s warm)
+          predates the log finding above. Stage L asks that the cache key full paths and read file stats from
+          the file, not the directory entry.</li>
+    </ul>
   </div>
   <h3>4.1 Instrument</h3>
   <p>Add stopwatch timings around each of <code>RefreshAsync</code>'s ten steps and around
@@ -739,7 +1159,8 @@ fileStream.Position = 0;</code></pre>
     <tr><td>Per-pak full entry enumeration + regex</td>
         <td>Override detection matches <code>^(Mods|Public)/(.+?)/.+$</code> against
             <strong>every file entry in every pak</strong>. Likely the dominant cost at high mod counts.</td></tr>
-    <tr><td>MD5 hashing</td><td>If a hash is computed over whole pak files, that alone can dominate.</td></tr>
+    <tr><td>MD5 hashing</td><td>If a hash is computed over whole pak files, that alone can dominate.
+            <strong>Killed 2026-11:</strong> no hashing exists anywhere.</td></tr>
     <tr><td>No metadata cache</td>
         <td>There is no on-disk cache of parsed mod metadata. A cache keyed by
             <em>path + mtime + size</em> would skip nearly all work on subsequent launches — probably
@@ -755,7 +1176,7 @@ fileStream.Position = 0;</code></pre>
 </section>
 
 <section id="stage5">
-  <h2><span class="num">9</span>Stage 5 &mdash; Perf B: filter &amp; search</h2>
+  <h2><span class="num">11</span>Stage 5 &mdash; Perf B: filter &amp; search</h2>
   <p><span class="pill up">UPSTREAMABLE</span> <span class="branch">perf/filter</span>
      <span class="pill fork">+ fork-only: fuzzy matching</span></p>
 
@@ -777,6 +1198,31 @@ fileStream.Position = 0;</code></pre>
        out of 1,700&ndash;3,800 &mdash; and would make things <em>worse</em> by firing that 1.2&nbsp;s
        of work more often per keystroke. <strong>Fix the per-keystroke cost first; retune the throttle
        last.</strong></p>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>Review update 2026-11-23</strong> (design: <code>docs/review/stages/S5-final.md</code>; fuzzy
+       prototype in <code>docs/review/prototypes/fuzzy-search/</code>).</p>
+    <ul class="tight">
+      <li><strong>Steps 1 and 2 below save nothing</strong> (confirmed): the <code>Visibility</code> and
+          <code>IsSelected</code> setters already skip equal values, and the plain search allocates no
+          per-mod strings (CLAIM-03, CLAIM-04).</li>
+      <li><strong>The 1.2-3.3&nbsp;s is not in <code>OnFilterTextChanged</code>'s loop</strong>, which costs
+          milliseconds (CLAIM-05). Plausible owners: UI Automation (the measurement drove the boxes through
+          UIA, and 6.1 found an outside UIA client walking the tree), idle sampling, Debug JIT and container
+          realization. Start with S5-final's Step 0: a probe run with filtering disabled, as the
+          control.</li>
+      <li><strong>Filtered drops are safe</strong> (CLAIM-14 refuted): a drop lands next to the visible target
+          row. So the "Step 5 is more invasive" box below overstates the drag-and-drop half; the selection
+          half still holds. The real wrong-position bug is a drop into a <em>column-sorted</em> active list
+          (HARV-71).</li>
+      <li>The <code>@desc</code> and <code>@file</code> filters would throw on a mod with no description or
+          path; latent only, add the null guard in any rework (HARV-69).</li>
+      <li>S5-final's order: Step 0 probe; extract <code>ModFilterQuery</code>; count flips; filter through the
+          collection view and drop the row <code>Visibility</code> binding; map drops by item (with the view
+          step); O(n) renumber; the 150&nbsp;ms throttle last. Fuzzy search (fork-only) sits on top; the
+          prototype scores 1,121 mods in about 0.5&nbsp;ms per keystroke.</li>
+    </ul>
   </div>
 
   <h3>Where the time goes</h3>
@@ -804,9 +1250,11 @@ fileStream.Position = 0;</code></pre>
   <ol>
     <li><strong>Only assign <code>Visibility</code> when it actually changes.</strong> Compare before
         writing. On a no-match search this should collapse ~1.2&nbsp;s toward nothing, and it is a
-        few lines. Do this first and re-measure &mdash; it may be most of the win.</li>
+        few lines. Do this first and re-measure &mdash; it may be most of the win.
+        <em>(2026-11: saves nothing; the setters already compare. See the review update.)</em></li>
     <li><strong>Hoist the per-keystroke allocations.</strong> Cache a lowercase name/author key per
-        mod at load time instead of rebuilding strings for 1&nbsp;121 mods on every filter pass.</li>
+        mod at load time instead of rebuilding strings for 1&nbsp;121 mods on every filter pass.
+        <em>(2026-11: saves nothing; there are no per-mod allocations to hoist.)</em></li>
     <li><strong>Re-measure, then retune the throttle</strong> &mdash; once a keystroke is cheap,
         150&nbsp;ms becomes safe and the UI feels live.</li>
     <li><strong>Then add fuzzy matching</strong> on the now-cheap path, with ranking.</li>
@@ -826,7 +1274,7 @@ fileStream.Position = 0;</code></pre>
 </section>
 
 <section id="stage6">
-  <h2><span class="num">10</span>Stage 6 — The list workstream</h2>
+  <h2><span class="num">12</span>Stage 6 — The list workstream</h2>
   <p><span class="branch">perf/list-render → feat/overrides-in-order → feat/categories</span></p>
   <p>Three things that all rewrite the same surface. Doing them separately means rebuilding the mod
      list three times, so they share a stage — but they stay separate branches, because the first is
@@ -1121,13 +1569,32 @@ fileStream.Position = 0;</code></pre>
        wrapper in <code>MainResourceDictionary.xaml</code>, the <code>MainWindow</code> hook, the
        selection logging in <code>UpdateIsSelected</code>, and a change swapping
        <code>MeasureText</code>'s exception logging for a counter. Keep the harness while the list
-       work is open; drop it, and restore that logging, when it closes. Nothing is pushed.</p>
+       work is open; drop it, and restore that logging, when it closes. Pushed to <code>origin</code>
+       (by 2026-11-03) so the cloud review could read it.</p>
     <p><strong>Tested 2026-09-23 by cherry-picking the real commits onto <code>master</code></strong> in a
        throwaway worktree: <code>b123aff6</code>, <code>2858a235</code> and <code>7fa83473</code> apply
        cleanly, and the result has no probe references. <strong><code>309b81ef</code> conflicts</strong>
        in <code>HorizontalModLayout.xaml.cs</code>: it was written on top of the TEMP selection logging
        from <code>789ec87c</code>, so it needs a hand-resolved version for any PR. (Not built on bare
        <code>master</code>; that needs the submodules set up in the worktree.)</p>
+    <p><strong>Review note 2026-11-23.</strong> The cloud review never got to this branch: its 6.1 branch
+       review is missing, so nothing here has had a second pair of eyes. Three unverified leads from it
+       touch files this branch changes: the custom automation peers strip UIA patterns and walk the whole
+       visual tree per query (UI-07, which fits the outside-UIA-client cost above),
+       <code>MainResourceDictionary.xaml</code> is parsed 15 times (UI-10), and the screen-reader DLL preload
+       uses an ANSI path and ignores failure (UI-14).</p>
+  </div>
+
+  <div class="callout warn">
+    <p><strong>Review design for 6.2 and 6.3: <code>docs/review/stages/S6-final.md</code></strong> (judged
+       across three designs). Rows become one flat <code>ActiveRows</code> collection with
+       <code>ActiveMods</code> derived from it; dividers persist in a versioned <code>Layout</code> member of
+       the order JSON; override <em>positions</em> are not persisted, because the game ignores them; an
+       Overrides block lists the installed force-loaded mods. PR-0 is the <code>modsettings.lsx</code> write
+       guard (<a href="#stageF">Stage F</a>). Two confirmed facts shape it: <code>Order</code> is rebuilt from
+       <code>ActiveMods</code> after every change, so any per-entry field is wiped (CLAIM-09, Stage F's
+       order-keep-missing fix), and a path UUID must never reach <code>modsettings.lsx</code> (CLAIM-15).
+       Its open questions are in §14 and its in-game protocol in §15.</p>
   </div>
 
   <h3>6.2 Overrides folded into the load order <span class="pill fork">FORK-ONLY</span></h3>
@@ -1177,8 +1644,39 @@ fileStream.Position = 0;</code></pre>
   </figure>
 </section>
 
+<section id="stageL">
+  <h2><span class="num">13</span>Stage L: mod library and per-order deployment</h2>
+  <p><span class="pill fork">FORK-ONLY</span> <span class="branch">feat/lib-*</span>, design:
+     <code>docs/review/stages/LIB-final.md</code> (judged from three designs; design only, nothing built)</p>
+  <div class="callout">
+    <p><strong>Requested 2026-11-03, proposed here, not yet accepted.</strong> Keep every version of every
+       mod, let each order pin the versions it uses, and deploy an order by hardlinking exactly its paks into
+       <code>Mods</code>.</p>
+  </div>
+  <ul class="tight">
+    <li><strong>Library:</strong> every pak version stored once, keyed by its SHA-256 content hash, with a
+        library trash for safe removal.</li>
+    <li><strong>Pins:</strong> one top-level <code>"Pins"</code> map per order, plus
+        <code>Deploy.Overrides</code> for override membership. Not on <code>DivinityLoadOrderEntry</code>:
+        that list is rebuilt after every change, so a pin stored there is wiped before deploy reads it
+        (CLAIM-09). <code>[JsonExtensionData]</code> on <code>DivinityLoadOrder</code> so older fork builds
+        keep both members.</li>
+    <li><strong>Deploy:</strong> on export, sync <code>Mods</code> to the order with hardlinks. The premise: a
+        pak left in <code>Mods</code> but not listed in <code>modsettings.lsx</code> may still override vanilla
+        files (from the Nexus Mods App's BG3 notes; in-game test G4 confirms it on your machine). A
+        junction-swap mode can come later behind the same deployment-target interface.</li>
+    <li><strong>Placement:</strong> after 6.2, before Stage 8; Stage 7 can go either side. Hard prerequisites:
+        temp-then-rename pak writes (Stage 3, HARV-61) and the <code>modsettings.lsx</code> write guard
+        (Stage F). Soft: the Stage 4 cache (full-path keys, stats read from the file) and the Stage 2 export
+        restructure.</li>
+    <li><strong>Verification:</strong> in-game tests G1-G9 (back up <code>Mods</code> and
+        <code>PlayerProfiles</code> first), Windows integration tests on NTFS, and unit tests over a fake
+        file-operations layer (LIB-final §11).</li>
+  </ul>
+</section>
+
 <section id="stage7">
-  <h2><span class="num">11</span>Stage 7 — UI/UX refresh</h2>
+  <h2><span class="num">14</span>Stage 7 — UI/UX refresh</h2>
   <p><span class="pill fork">FORK-ONLY</span> <span class="branch">ui/*</span></p>
   <p>Everything that isn't the mod list, after the list has settled. Working within AdonisUI rather
      than replacing it keeps the diff reviewable and the theme system intact.</p>
@@ -1193,20 +1691,26 @@ fileStream.Position = 0;</code></pre>
   </ul>
   <p><strong>Avalonia note:</strong> this is the stage a future port would throw away entirely.
      If a port ever looks likely, keep behaviour in view models rather than code-behind.</p>
+  <p><strong>Review design:</strong> <code>docs/review/stages/S7.md</code> (a refresh within AdonisUI). One
+     unverified lead belongs here: the light theme is not applied to lazily created windows or popup message
+     boxes (UI-06).</p>
 </section>
 
 <section id="stage8">
-  <h2><span class="num">12</span>Stage 8 — Multi-order export</h2>
+  <h2><span class="num">15</span>Stage 8 — Multi-order export</h2>
   <p><span class="pill fork">FORK-ONLY</span> <span class="branch">feat/multi-order-export</span></p>
   <p>Select several orders; produce one zip containing each order's JSON plus the union of their
      mods, deduplicated. Cheap <em>if</em> Stage 2 already restructured the export around a set of
      orders and a mod set; awkward otherwise. Dedupe by UUID, and decide explicitly what happens
      when two orders reference different <em>versions</em> of the same mod — that is a real case,
      and the naive union silently picks one.</p>
+  <p><strong>Review design:</strong> <code>docs/review/stages/S8.md</code> (a multi-order bundle format,
+     designed together with friend sync). With <a href="#stageL">Stage L</a>, version pins answer the
+     "different versions" question: the bundle carries each order's pinned versions from the library.</p>
 </section>
 
 <section id="stage9">
-  <h2><span class="num">13</span>Stage 9 — The ambitious set</h2>
+  <h2><span class="num">16</span>Stage 9 — The ambitious set</h2>
   <p><span class="pill fork">FORK-ONLY</span> — <strong>each needs its own spec session before any
      code.</strong> Listed here so the roadmap is honest about them, not because they are planned.</p>
   <table>
@@ -1225,10 +1729,14 @@ fileStream.Position = 0;</code></pre>
     <tr><td>Mod page dependency/version checks</td>
         <td>Rides on the Nexus work above.</td></tr>
   </table>
+  <p><strong>Review skeletons:</strong> <code>docs/review/stages/S9.md</code> sketches Nexus, mod.io and
+     native-mod management, and lists about 12 bugs on the Nexus code path to fix before reviving it. Note
+     that a non-empty <code>NexusModsAPIKey</code> already creates the Nexus client today, whatever the
+     feature flag says (CLAUDE.md §7).</p>
 </section>
 
 <section id="risks">
-  <h2><span class="num">14</span>Risks</h2>
+  <h2><span class="num">17</span>Risks</h2>
   <table>
     <tr><th>#</th><th>Risk</th><th>Mitigation</th></tr>
     <tr><td>R1</td><td>A perf change alters which mod wins dedupe or override detection —
@@ -1250,12 +1758,26 @@ fileStream.Position = 0;</code></pre>
         <td>Dividers stripped in <code>BuildOutputList</code>; verify by booting the game.</td></tr>
     <tr><td>R8</td><td>Errors stay invisible because logging is off by default and
         <code>ThrownExceptions</code> is unsubscribed everywhere.</td>
-        <td>Every fix in Stages 2–3 surfaces failures through <code>ShowAlert</code>.</td></tr>
+        <td>Every fix in Stages 2–3 surfaces failures through <code>ShowAlert</code>. Stage F's
+            background-errors fix also stops <code>ScheduleAsync</code> from dropping exceptions (VM1-02).</td></tr>
+    <tr><td>R9</td><td>Today's code loses load orders silently while you test: missing mods dropped on Save,
+        export with no backup, the restore prompt, "Current" imports (Stage F, Stage 3).</td>
+        <td>Stage F first. Back up <code>modsettings.lsx</code> and <code>Orders</code> before every test
+            session.</td></tr>
+    <tr><td>R10</td><td>.NET 8 is out of support (since 2026-11-10), and this machine cannot build
+        <code>net10.0</code>.</td>
+        <td>Install Build Tools 2026 (VS 18) side by side, pin the SDK with <code>global.json</code>, then
+            retarget in its own branch. See Stage 0.</td></tr>
+    <tr><td>R11</td><td>A crafted mod writes outside the Mods folder (SVC-01, VM2-06).</td>
+        <td>Path containment checks in Stage F.</td></tr>
+    <tr><td>R12</td><td>The review's findings are code-traced, not reproduced; a fix can target a bug that
+        behaves differently at runtime.</td>
+        <td>Start each fix branch with a Windows repro, or an instrumented check that logs PASS/FAIL.</td></tr>
   </table>
 </section>
 
 <section id="verify">
-  <h2><span class="num">15</span>Verification</h2>
+  <h2><span class="num">18</span>Verification</h2>
   <h3>Stage 0</h3>
   <ul class="tight">
     <li>Debug build completes and the app launches against your real mod folder.</li>
@@ -1263,10 +1785,24 @@ fileStream.Position = 0;</code></pre>
         <code>BG3ModManager_Latest.zip</code>.</li>
     <li>Baseline numbers recorded (load time + mod count, scroll feel, filter latency).</li>
   </ul>
+  <h3>Stage F</h3>
+  <ul class="tight">
+    <li>A test mod whose <code>meta.lsx</code> lists itself as a dependency: Save and Export skip the cycle
+        and the app stays open.</li>
+    <li>Bind a hotkey to a single letter: the editor rejects it, and a <code>keybindings.json</code> that
+        already holds one loads with a warning instead of a crash.</li>
+    <li>Load an order with a missing mod and Save: the missing entry is still in the saved JSON, in
+        place.</li>
+    <li>Empty <code>Orders</code> folder, then Save and Export Current: the selection stays on Current, the
+        app stays unlocked, and a <code>modsettings.lsx</code> backup exists.</li>
+    <li>Restart with Save Window Location on: the window comes back where it was.</li>
+    <li>Each check ships as an instrumented dev check that logs PASS/FAIL, per the standing rule.</li>
+  </ul>
   <h3>Stage 2 — export</h3>
   <ul class="tight">
-    <li>Export an order, then export <strong>again over the same filename</strong> with fewer mods.
-        The second zip opens cleanly. <em>This is the E1 regression test and it fails today.</em></li>
+    <li>Export an order, then use <strong>Export As over the same filename</strong> with fewer mods.
+        The second zip opens cleanly. <em>This is the E1 regression test and it fails today; a plain
+        Export never overwrites, so it can't reproduce E1.</em></li>
     <li>Lock a <code>.pak</code> (open it in another program) and export — you get a visible warning
         naming the mod, not a silent success.</li>
     <li>Cancel an export midway — no partial zip is left behind, no <code>_Temp_*</code> folder remains.</li>
@@ -1275,8 +1811,11 @@ fileStream.Position = 0;</code></pre>
   <ul class="tight">
     <li>Round-trip: export an order, import it into a clean mods folder. Every mod and the order
         itself come back.</li>
-    <li>Import a <strong>large</strong> order JSON (many mods) — this is the I1 case, and it is
-        size-dependent, so test with a big one deliberately.</li>
+    <li>Export while <strong>Current</strong> is selected, then import that archive with a saved order
+        selected: the imported order appears and the saved order is unchanged (HARV-31). This replaces the
+        refuted I1 large-JSON test.</li>
+    <li>Cancel an import midway, and import a <code>.pak.zst</code>: the installed copy survives and no
+        0-byte pak is left (HARV-61, AUDIT-PLAN-02).</li>
     <li>Import an archive containing one deliberately corrupt <code>.pak</code> — the others still
         import and you are told which one failed.</li>
   </ul>
@@ -1290,8 +1829,9 @@ fileStream.Position = 0;</code></pre>
 </section>
 
 <footer>
-  Detailed reference. Quick view: <strong>plan-overview.html</strong> · Repo facts:
-  <strong>CLAUDE.md</strong>
+  Detailed reference (the plan-overview.html quick view was retired 2026-11-06) · Repo facts:
+  <strong>CLAUDE.md</strong> · Review: branch <strong>kk/laughing-pascal-710otn</strong>,
+  <strong>docs/review/</strong>
 </footer>
 
 </div>

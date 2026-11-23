@@ -1,12 +1,17 @@
 # CLAUDE.md — BG3 Mod Manager (SpasticPengu fork)
 
 Context for AI agents working in this repo. Facts here were verified against the tree at
-commit `fc35358` (2026-09-18/20). Where something is inferred rather than observed, it says so.
+commit `fc35358` (2026-09-18/23); §2.1 and §2.2 also cover `fix/publish-prebuild-quoting`. Re-audited against `fc35358`
+by a cloud review on 2026-11-03 (branch `kk/laughing-pascal-710otn`, under `docs/review/`) and re-checked locally on 2026-11-23. Where something is inferred rather than observed, it says so.
 
-> **The fork's roadmap lives in `implementation-plan.html` (detailed) and `plan-overview.html`
-> (quick-view board).** Update both together on any status change — a stale board is worse than
-> none. Governing rule: anything that might go upstream (`fix/*`, `perf/*`) is branched from a
+> **The fork's roadmap lives in `implementation-plan.html`; start at its "Resume here" box.** Keep it current on any status
+> change. (`plan-overview.html` retired 2026-11-06: don't update it.) Governing rule: anything that might go upstream (`fix/*`, `perf/*`) is branched from a
 > clean `master` and never built on top of fork-only work.
+>
+> **These files are local-only.** `/CLAUDE.md`, `/implementation-plan.html` and the retired `/plan-overview.html` are
+> listed in `.git/info/exclude`, so they stay untracked on disk through every branch checkout. A snapshot lives on the
+> orphan `notes` branch (`origin/notes`, `9906953`, 2026-11-04); refresh it from a separate worktree. Never commit them
+> to a `fix/*`, `perf/*` or `chore/*` branch, or they land in an upstream PR.
 
 ---
 
@@ -21,8 +26,22 @@ origin    https://github.com/SpasticPengu/BG3ModManager.git   (this fork)
 upstream  https://github.com/LaughingLeader/BG3ModManager.git
 ```
 
-**This fork currently has zero custom commits.** `git rev-list --left-right --count upstream/master...master`
-→ `0  0`. Everything below describes upstream's code as inherited.
+**`master` carries no fork commits:** it equals `upstream/master` at `fc35358`. Fork work lives on branches pushed to
+`origin` (as of 2026-11-23): `fix/publish-prebuild-quoting` (`f6633a8`, `5f8a80a9`), `perf/list-render` (13 commits on
+`fc35358`: five fixes, seven `TEMP:` instrumentation commits and `e38c87b`, which only re-encodes the TEMP `PerfProbe.cs`),
+the orphan `notes` branch (`9906953`: this file and the plan) and `kk/laughing-pascal-710otn` (the 2026-11-03 cloud review,
+`docs/review/`). Local `fork/main` (= `fc35358`) has not been pushed. List them with `git branch -r` and
+`git log --oneline master..origin/<branch>`. Everything below describes upstream's code as inherited unless it names a branch.
+
+`perf/list-render` keepers: `b123aff`; `309b81e` + `396d7b2` (ship together; `309b81e` sits on TEMP logging from
+`789ec87` and conflicts on `master`, so a PR needs a hand-resolved version); `2858a23`, then `7fa8347` (it needs `2858a23`
+first). Everything else there is instrumentation that must be dropped before any upstream PR. Empty `perfprobe` and
+`perfscroll` files next to the exe make that build scroll itself and exit (`MainWindow.xaml.cs:391-393`,
+`PerfScrollDriver.cs:15,152`).
+
+Cloud/agent containers may be shallow and lack the `upstream` remote. Run
+`git remote add upstream https://github.com/LaughingLeader/BG3ModManager.git && git fetch upstream` (add `--unshallow`
+if `git rev-parse --is-shallow-repository` prints `true`) before any upstream comparison.
 
 ### Upstream is split across two branches, and we forked the legacy one
 
@@ -72,7 +91,9 @@ Debug and Publish both produce working output; `LSLibNative.dll` links; both par
 `ContinueOnError`. The generated `*.lex.cs` / `*.yy.cs` are gitignored and
 `External/lslib/External/` ships with only a `.keep`, so a **fresh clone must supply both exes**
 in `External/lslib/External/gppg/binaries/` — the csproj is authoritative over lslib's README,
-which wrongly says gplex goes in `External\gplex\`.
+which wrongly says gplex goes in `External\gplex\`. Both csprojs spell the path in lower case
+(`..\external\gppg\binaries\`, `LSLib.csproj:62-63`, `LSLibStats.csproj:11-12`) while the folder is `External`, so it
+resolves only on a case-insensitive file system.
 
 **Do not set `MSBuildSDKsPath`, `MSBuildEnableWorkloadResolver` or `DOTNET_HOST_PATH`.** They were
 tried as workarounds before the SDK component was installed and are mutually exclusive dead ends:
@@ -80,7 +101,17 @@ tried as workarounds before the SDK component was installed and are mutually exc
 fixes those but then `GUI.csproj` fails `NETSDK1112`. With the component installed, builds are
 clean with all three unset.
 
-Also available: .NET SDK 10.0.400, Python 3.14, git 2.55. `gh` is authenticated as `SpasticPengu`.
+Also available: .NET SDKs 9.0.318 and 10.0.400, Python 3.14, git 2.55. `gh` is authenticated as `SpasticPengu`.
+
+**Restore and build run on different SDKs.** There is no `global.json`. `dotnet restore` picks SDK 10.0.400, but MSBuild
+17.14 cannot load it (its `minimumMSBuildVersion` is 18.0.0) and falls back to 9.0.318, not 8.0.425. Every TFM is net8,
+so only analyzer, Roslyn and NuGet versions differ between the two steps.
+
+**.NET 8 and .NET 9 reached end of support on 2026-11-10.** Nothing broke, but the runtime no longer gets security
+patches (the final .NET 8 patch is 8.0.34; this machine has desktop runtime 8.0.31). The six .NET projects in the `.sln`
+(Core, GUI, Toolbox, LSLib, LSLibNative, LSLibStats) all target `net8.0*`, and README.md:11 still links runtime 8.0.15.
+Moving to `net10.0` needs MSBuild/VS 18.0 or later, so these Build Tools 17.14 cannot target it (no VS 18, no v145 toolset
+here): install Build Tools 18 side by side before retargeting. Whether net10 C++/CLI also needs v145 is unconfirmed.
 
 Use `-nodeReuse:false` on MSBuild — leftover worker nodes linger ~15 min and will block a
 Visual Studio Installer run with `VSProcessesRunning`.
@@ -97,6 +128,11 @@ Workaround if you must: `-p:SolutionDir="<repo root>\"` (trailing backslash requ
 `Release|x64`. `BG3ModManager.sln` remaps `Publish|x64` and `PublishTest|x64` → `Release|x64` for it.
 This is the other reason to build the solution. (It is also why the odd `Editor Debug` solution
 configuration exists at all.)
+
+**Don't build `Publish|Any CPU` or `PublishTest|Any CPU`.** Those solution platforms build LSLib, LSLibNative and
+LSLibStats in **Debug** (`BG3ModManager.sln:113-118,133-138,153-158`), so a release can ship a debug-CRT native DLL
+that fails to load on users' PCs. MSBuild's default solution platform is `Any CPU`, so any Publish command that omits
+`-p:Platform=x64` lands here.
 
 **The `Publish` pre-build step works — by accident.** `GUI.csproj:82` originally read:
 
@@ -160,7 +196,11 @@ HeaderParser.cs(24,25): error CS0246: The type or namespace name 'HeaderScanner'
 The second build sees them; the `Exec`s are guarded by `Condition="!Exists(...)"` so nothing is
 regenerated. Fix belongs in the lslib submodule.
 
-**`Release|x64` silently does not build Toolbox.** `BG3ModManager.sln:102-104` has
+`External/lslib/LSLibStats/LSLibStats.csproj` has the same trap for ten more generated files (`LSLibStats.csproj:19-34`),
+and the `.sln` builds it in every configuration (`BG3ModManager.sln:24,145-164`) although only `StatParser`, which is not in
+the `.sln`, references it. A fix limited to `LSLib.csproj` still leaves the first build failing.
+
+**`Release|x64` silently does not build Toolbox.** `BG3ModManager.sln:104` (`Release|Any CPU`, `:102-103`, does build it) has
 `{2F2EF4FE…}.Release|x64.ActiveCfg` but **no matching `.Build.0`**. Since the GUI shells out to
 `Tools\Toolbox.exe` at runtime, a Release build yields an app whose Script Extender updater
 silently does nothing. Toolbox does build in Debug, Publish and PublishTest.
@@ -169,8 +209,9 @@ silently does nothing. Toolbox does build in Debug, Publish and PublishTest.
 `Configuration=='Release'`; `GUI.csproj` sets `Optimize` only for `Debug`. Core/Toolbox/LSLib escape
 this by setting `<Optimize>True</Optimize>` unconditionally — only `BG3ModManager.dll` is affected.
 
-**`DebugType=none`** in Core (`:12`), Toolbox (`:13`) and LSLib means **no symbols, no line numbers
-in anything but `Debug`.** Reproducing a user stack trace requires a Debug build.
+**`DebugType=none`** in Core (`:12`), Toolbox (`:13`) and LSLib (`:15`) means **no managed symbols, no line numbers
+for those assemblies in anything but `Debug`.** The GUI never sets `DebugType` outside Debug, so `BG3ModManager.dll` gets a
+portable PDB in Release and Publish, but Publish's `SetupLibFolder` deletes every top-level PDB (`GUI.csproj:94,98`). Reproducing a user stack trace requires a Debug build.
 
 ### 2.3 Commands
 
@@ -195,7 +236,7 @@ msbuild BG3ModManager.sln -t:Build -p:Configuration=Debug -p:Platform=x64 -resto
 ```
 
 ```powershell
-# Release zip — REQUIRES MSBuild AND python on PATH; fix the PreBuildEvent first
+# Release zip — REQUIRES MSBuild AND python on PATH; on a clean checkout build Debug once first (CrossSpeak pack trap, §2.2)
 msbuild BG3ModManager.sln -t:Build -p:Configuration=Publish -p:Platform=x64 -restore -m
 ```
 
@@ -214,7 +255,9 @@ The app survives this via a hand-rolled resolver in `src/GUI/Program.cs:13-29` �
 Consequences: `_Lib` only works for **managed** assemblies; it uses `Assembly.LoadFile` (no
 dependency resolution); and anything loading assemblies by path or reflection **can pass in Debug
 and fail in Publish**. Native screen-reader DLLs get an explicit `LoadLibrary` from `_Lib`
-(`src/Core/AppServices/ScreenReaderService.cs:49-70`).
+(`src/Core/AppServices/ScreenReaderService.cs:49-70`). `_Lib` exists in **every**
+configuration, not only Publish: the `CrossSpeakLibraryFiles` target (`GUI.csproj:85-90`) copies those native DLLs
+there after every build.
 
 `RunBuildRelease` then runs `python BuildRelease.py <version>` from the repo root, producing
 `BG3ModManager_v<ver>.zip` + `BG3ModManager_Latest.zip` (both gitignored via `*.zip`).
@@ -243,7 +286,9 @@ Toolbox.csproj  — references NOTHING in-repo; built only by the .sln; launched
   `Toolbox.exe UpdateScriptExtender -u "<DWrite.dll>" -b "<game bin dir>"`
   (`MainWindowViewModel.cs:~436`). It exists as a separate process because it `LoadLibrary`s and
   P/Invokes DWrite.dll, which the GUI must never load itself. **Change its PowerArgs verb and the
-  GUI breaks silently** — only a `[Toolbox]` line in the log shows it.
+  GUI breaks silently** — only a `[Toolbox]` line in the log shows it. It also runs only when the `ScriptExtender`
+  feature is on, `Tools\Toolbox.exe` and `DWrite.dll` exist and `ExtenderUpdaterSettings.UpdaterVersion >= 4`, and it
+  is killed after 120 s (`MainWindowViewModel.cs:420,426,447-450`).
 
 ### Startup order
 
@@ -255,12 +300,21 @@ Toolbox.csproj  — references NOTHING in-repo; built only by the .sln; launched
    builds `MainWindowViewModel`, creates `MainViewControl` **in code** and adds it to `MainGrid`,
    constructs Settings/Update windows.
 5. `MainWindowViewModel.OnViewActivated` (`:4105`) — the real init: `InitSettingsBindings()` →
-   `LoadSettings()` → `Keys.LoadKeybindings()` → `SaveSettings()` → `RefreshAsync` on the taskpool.
+   `LoadSettings()` → `Keys.LoadKeybindings()` → `SaveSettings()` → `RefreshAsync`, started on the taskpool (`:4145`).
+   **It does not stay there.** Its first await is an `Observable.Start(..., RxApp.MainThreadScheduler)` (`LoadSettings` at
+   `:2365-2368` when `IsInitialized`, else `SetMainProgressTextAsync`, `:2232-2238`), whose awaiter resumes inline on the
+   Dispatcher. From then on `LoadModsAsync` and `LoadModPackageDataAsync` run on the **UI thread**. Each per-pak task does a
+   synchronous `pr.Read` (open plus file table) before its first await (`DivinityModDataLoader.cs:691-693,778-784`), so the
+   expensive part is serial; only continuations after a truly asynchronous read (LZ4-compressed `meta.lsx`) run in parallel
+   on pool threads. `ConfigureAwait(false)` alone does not fix it. (Code-traced, not run; a thread-ID log in `RefreshAsync`
+   would settle it.)
 
 **`MainWindow.xaml` is only 60 lines** — the real UI is `MainViewControl.xaml` (524 lines).
 
-**No single-instance guard.** Two copies both write `Data/settings.json` on a 250 ms debounce;
-last writer wins silently.
+**No single-instance guard.** Two copies both write `Data/settings.json`; last writer wins silently. Most
+saves are immediate `SaveSettings()` calls; only window-geometry saves go through the 250 ms `QueueSave`
+(`MainWindowViewModel.cs:1273-1278`, called from `MainWindow.xaml.cs:196,249`), which returns early while
+`!IsInitialized && IsRefreshing`.
 
 ### Service location — Splat, not DI
 
@@ -283,7 +337,7 @@ Almost no `#region` markers. Navigate by line range:
 
 | Lines | Contents |
 |---|---|
-| 49–256 | property/collection declarations; `SourceCache<DivinityModData,string> mods` at `:80`, keyed by UUID |
+| 49–256 | property/collection declarations; `SourceCache<DivinityModData,string> mods` at `:82`, keyed by UUID |
 | 329–760 | Script Extender: download DWrite.dll, run Toolbox, version checks |
 | 859–1111 | `InitSettingsBindings()` |
 | 1112–1315 | `LoadSettings` / `SaveSettings` / `QueueSave` |
@@ -295,8 +349,9 @@ Almost no `#region` markers. Navigate by line range:
 | 4178–4316 | filter parsing (`@author foo` syntax) |
 | **4891–5448** | **the constructor — roughly half the app's behaviour** |
 
-**Practical rule: to find behaviour, grep the constructor first.** Every `ReactiveCommand`, every
-hotkey action, every DynamicData filter, and the `modsettings.lsx` watcher live there.
+**Practical rule: to find behaviour, grep the constructor first.** Every `ReactiveCommand`, most
+hotkey actions (5 of the VM's 30 `.AddAction` calls, such as OpenLogsFolder `:881`, are in `InitSettingsBindings`;
+`MainWindow.xaml.cs` and `HorizontalModLayout.xaml.cs` add 4 more each), every DynamicData filter, and the `modsettings.lsx` watcher live there.
 
 ---
 
@@ -325,18 +380,26 @@ dropped upstream after v19. Don't "fix" the version mismatch; it will break ever
 - `ToUIPropertyImmediate(...)` — `deferSubscription: false`
 
 **Use `ToUIPropertyImmediate` whenever non-UI logic reads the property** (notably DynamicData
-`Filter`/`AutoRefresh` predicates) — a deferred OAPH has no value until something subscribes.
+`Filter`/`AutoRefresh` predicates) — a deferred OAPH doesn't subscribe to its source until the first `.Value` read,
+and returns `initialValue` until then. Both helpers wrap `ToPropertyEx` (`:19`, `:35`), so they need a Fody-woven
+`[ObservableAsProperty] T Prop { get; }`; they can't back a hand-written `_field` OAPH.
 
-`MainWindowViewModel` predates these helpers and uses raw `_field` + `.ToProperty(...)`. New code
-should use the helpers.
+In practice the helpers are used only in two Core models (`DivinityModData.cs`, `DivinityModManagerSettings.cs`).
+All of GUI uses raw `_field` + `.ToProperty(...)` (46 sites, zero `[ObservableAsProperty]`), and Core has 26 raw
+sites. Match the file you're in: helpers on a Fody `[ObservableAsProperty]` model, raw `ToProperty` in a
+`_field`-style view model.
 
 ### Commands
 
 `ReactiveCommand.Create` ×51, `CreateFromTask` ×2, `CreateFromObservable` ×1.
 **`CreateRunInBackground` is not used.** Long work is *not* done inside the command — the body is
-synchronous and hands off via `RxApp.TaskpoolScheduler.ScheduleAsync(...)` (22 sites).
-`canExecute` is always a named `IObservable<bool>` from `WhenAnyValue`, and
-`outputScheduler: RxApp.MainThreadScheduler` is passed explicitly on UI-touching commands.
+synchronous and hands off via `RxApp.TaskpoolScheduler.ScheduleAsync(...)` (15 sites in
+`MainWindowViewModel`, 1 in `SettingsWindowViewModel.cs:230`; `MainWindowViewModel.cs:2594` is a `MainThreadScheduler.ScheduleAsync`).
+`canExecute`, when present, is usually a named `IObservable<bool>` built with `WhenAnyValue`, but 15 of the 54 commands
+have none (`CopyOrderToClipboardCommand` `:5131`, `SaveSettingsSilentlyCommand` `:5369`) and some pass other observables
+(`BaseProgressViewModel.cs:63`, `BaseHistoryViewModel.cs:92`). An explicit output scheduler is the exception: one named
+`outputScheduler:` (`:4926`) and seven positional `RxApp.MainThreadScheduler` arguments in the whole repo (e.g.
+`RefreshCommand`, `:4991`), so pass `RxApp.MainThreadScheduler` yourself whenever a command's subscribers touch the UI.
 
 Cancellable progress: derive from `BaseProgressViewModel` and override `Task<bool> Run(CancellationToken)`.
 
@@ -350,7 +413,7 @@ So `RxExceptionHandler` is effectively dead once the VM exists, and
 ### DynamicData 9.x
 
 One source of truth: `SourceCache<DivinityModData, string> mods` keyed by UUID
-(`MainWindowViewModel.cs:80`). Views are built at `:5239-5246`:
+(`MainWindowViewModel.cs:82`). Views are built at `:5239-5246`:
 
 ```csharp
 var modsConnection = mods.Connect();
@@ -371,6 +434,18 @@ To add a filtered view: declare `ReadOnlyObservableCollection<DivinityModData>`,
   filter them** — `OnFilterTextChanged` sets `DivinityModData.Visibility` per item and the item
   container hides itself. That is why `IsSelected`'s setter refuses `true` when
   `Visibility != Visible`, and why programmatic multi-select on a filtered list appears to no-op.
+- **`SelectedModOrder.Order` is rebuilt from `ActiveMods`.** Every `ActiveMods` `CollectionChanged` (Move included)
+  schedules `UpdateOrderFromActiveMods` 250 ms later (`:5401-5408`). It clears `Order` and re-adds entries through
+  `ToOrderEntry`, which copies only UUID and Name (`:4880-4888`; `DivinityModData.cs:299-306`). Export and save call it
+  too. A new per-entry field on `DivinityLoadOrderEntry` is wiped unless it is carried over by UUID; prefer an
+  order-level map keyed by UUID.
+- **Drag-drop indices.** With visibility filtering, gong's `UnfilteredInsertIndex` equals the model index, so drops
+  into a filtered list land correctly. A column-header sort adds `SortDescriptions` to the default view
+  (`HorizontalModLayout.xaml.cs:752-769`), and a drop into a sorted active list then inserts at the sorted-view index.
+- **Never enable WPF grouping on the mod lists.** `Themes/MainResourceDictionary.xaml:460-461` sets
+  `CanContentScroll=False` when `IsGrouping=True`, which turns virtualization off; `CanContentScroll=True` comes only
+  from AdonisUI's ListView style. Virtualization is `Recycling` (`HorizontalModLayout.xaml:119-120,223-224`) and
+  `VirtualizingPanel.ScrollUnit` is set nowhere. Categories are flat divider rows.
 
 ### Threading — the live bug class
 
@@ -384,7 +459,14 @@ await Observable.Start(() => { LoadSettings(); }, RxApp.MainThreadScheduler);
 ```
 
 That is exactly what commit `fc35358` ("Load settings on the main UI thread") added to `RefreshAsync`.
-There are 22 `ScheduleAsync` sites in `MainWindowViewModel` where the same hazard lurks.
+There are 15 `TaskpoolScheduler.ScheduleAsync` sites in `MainWindowViewModel` where the same hazard lurks.
+Once a body awaits its first `Observable.Start(..., MainThreadScheduler)` (in `RefreshAsync` this `LoadSettings` call or
+`SetMainProgressTextAsync`), the rest of it runs on the UI thread (§3, Startup order). **Rx drops any exception thrown
+inside these `ScheduleAsync` bodies** (only `OperationCanceledException` is handled), so it reaches neither
+`ThrownExceptions`, `RxApp.DefaultExceptionHandler` nor `DispatcherUnhandledException`, and the repo has no
+`TaskScheduler.UnobservedTaskException` handler. `RefreshAsync` (`:2340-2557`) has no outer try/finally, so a throw there
+leaves the progress overlay up and `IsRefreshing=true` until restart. Wrap new background work in try/catch/finally and
+route failures to `ShowAlert`.
 
 ### Settings — three attributes, each doing something different
 
@@ -397,11 +479,30 @@ A setting on `DivinityModManagerSettings` needs **all three** or it half-works:
 | `[SettingsEntry(name, tooltip)]` | never appears in Preferences (the window is generated by reflection, not XAML) |
 
 `SetFrom` also **skips null values**, so a property saved as `null` silently keeps its in-memory default.
+`settings.json` is written with `DefaultValueHandling.IgnoreAndPopulate` (`MainWindowViewModel.cs:1235`), so a value
+equal to its `[DefaultValue]` is omitted from the file and re-populated on load.
+
+`ExtenderSettings`/`ExtenderUpdaterSettings` are restored through the **untyped** `SetFrom<T>`
+(`MainWindowViewModel.cs:1128-1129`; `ModelExtensions.cs:29-42`), which copies every non-null property whether or not
+it has `[Reactive]`; boxed `bool`/`DateTime` values are never null. For the same reason never `SetFrom` a whole
+`DivinityLoadOrder`: it overwrites `IsModSettings` and keeps `FilePath`, which is how importing an archive's
+"Current" order can make a later Save write JSON into `modsettings.lsx` (`MainWindowViewModel.cs:3110-3127`).
 
 **Never reassign `Settings.ExtenderSettings` / `ExtenderUpdaterSettings` / `Window` / `Confirmations`** —
 mutate in place. Dozens of subscriptions capture the original instance; swapping it dead-ends the
-whole Script Extender settings UI. That was bug `7b57e5a`. `[IgnoreSetFrom]` exists but
+whole Script Extender settings UI. That was the bug `7b57e5a` fixed, and the same commit
+left `Window`/`Confirmations` unrestored (see below). `[IgnoreSetFrom]` exists but
 **nothing reads it** — the real exclusion is done by omitting `[Reactive]`.
+
+**`Settings.Window` and `Settings.Confirmations` are never restored from disk.** Both are `[DataMember]` without
+`[Reactive]` (`DivinityModManagerSettings.cs:112,122`), `SetFrom<T, ReactiveAttribute>` skips them, and nothing else
+copies them (`MainWindowViewModel.cs:1127-1129`). `OnViewActivated` then calls `SaveSettings()` straight after
+`LoadSettings()` (`:4126-4133`), writing the defaults over the saved values. So "Save Window Location" never applies
+(`ApplyWindowPosition` gets -1 values, `MainWindow.xaml.cs:205-235`) and `DisableAdminModeWarning` is forgotten on every
+restart. Fix by copying the fields into the existing instances (never reassign them; `WindowSettings` is a POCO, so copy
+its six fields by hand). Also note `ApplyWindowPosition` treats any negative X or Y as unset (`MainWindow.xaml.cs:231-232`),
+so a window on a monitor left of or above the primary still loses its position after that fix. Any new nested settings
+object needs its own restore line or it repeats this bug.
 
 The Preferences window and the top menu bar are **both generated by reflection**. Adding a menu item
 means adding a `Hotkey` property with `[MenuSettings]` to `src/GUI/ViewModels/AppKeys.cs`, not
@@ -419,11 +520,13 @@ public class ModUpdatesLayoutBase : ReactiveUserControl<ModUpdatesViewData> { }
 Wiring goes in `this.WhenActivated(d => { ... })` in the constructor. House style is **`d(binding)`
 as a call, not `.DisposeWith(d)`** — both compile; mixing makes diffs noisy.
 
-Windows derive from `HideWindowBase<T>` and **cancel Closing / `Hide()` instead**. They are
+Secondary windows derive from `HideWindowBase<T>` and **cancel Closing / `Hide()` instead**; `MainWindow`
+derives directly from `AdonisWindow` (`MainWindow.xaml.cs:26`) and really closes. They are
 constructed once and live for the process — don't expect ctor/dispose logic to re-run.
 
-**Moving a Core type between namespaces breaks XAML silently.** `SettingsWindow.xaml` carries eight
-`clr-namespace:...;assembly=DivinityModManagerCore` declarations. Grep `src/GUI/**/*.xaml` after any
+**Moving a Core type between namespaces breaks XAML silently.** `src/GUI` has 24
+`clr-namespace:...;assembly=DivinityModManagerCore` declarations across 10 XAML files (7 in
+`Themes/MainResourceDictionary.xaml`, 4 in `SettingsWindow.xaml`). Grep `src/GUI/**/*.xaml` after any
 namespace change.
 
 ---
@@ -433,7 +536,13 @@ namespace change.
 `.editorconfig` has only `[*.cs]` and `[*.{cs,vb}]` sections — **XAML, JSON and csproj are
 unconfigured; match the surrounding file.**
 
-- **Hard tabs**, size 4. **CRLF.** `insert_final_newline = false`. Most files have a UTF-8 **BOM** —
+- **Hard tabs**, size 4. **Line endings: CRLF in a Windows working tree, LF in the repo.** The index stores LF for most
+  files (`git ls-files --eol 'src/*.cs'` on master: 168 LF, 6 CRLF, 11 mixed; the `.sln`, the GUI and Core csprojs and
+  three XAML files are CRLF) and `.gitattributes` has no `text`/`eol` rule. This machine sets `core.autocrlf=true`
+  system-wide, so files check out CRLF and CRLF edits commit back as LF; files already CRLF or mixed in the index are left
+  alone. On a clone without autocrlf (Linux, cloud sessions) files are LF on disk while `.editorconfig:15,251` says
+  `crlf`: there, keep each file's existing endings and don't let an editor or `dotnet format` rewrite a whole LF file. Don't
+  add a `* text=auto` renormalisation on the fork (master tracks upstream). `insert_final_newline = false`. Most files have a UTF-8 **BOM** —
   preserve it when rewriting a file whole.
 - **Allman braces** (`csharp_new_line_before_open_brace = all`).
 - **File-scoped namespaces**; usings outside the namespace.
@@ -460,7 +569,8 @@ port are unprefixed (`ProcessHelper`, `ModRegistryService`, `ModuleShortDesc`, `
 | GUI | **off** | **off** | `src/GUI/Usings.cs` |
 | Toolbox | `enable` | `enable` | none |
 
-**Do not write `string?` in Core or GUI** — it yields CS8632. Only Toolbox is annotated.
+**Do not write `string?` in Core or GUI** — it yields warning CS8632 (a few already exist: `WebHelper.cs:11-16`,
+`DivinityJsonUtils.cs:29`, `DivinityFileUtils.cs:414,424`, GUI `AppUpdateWindowViewModel.cs:31`); don't add more. Only Toolbox is annotated.
 
 Because ImplicitUsings is off, all ambient usings come from the hand-written `Usings.cs` files.
 Two things to know:
@@ -483,8 +593,12 @@ DivinityApp.Log($"message");   // pass ONLY the message — caller info is compi
 
 `src/Core/DivinityApp.cs:119` — it is `Trace.WriteLine`, no framework, no severity.
 **Logging is OFF by default** — `Trace` has no listener until `MainWindow.ToggleLogging(true)`
-attaches one. Enable via the `LogEnabled` setting, `DebugModeEnabled`, or **dropping an
-extension-less file named `debug` next to the exe**. Logs land in `<exe>/_Logs/`, and
+attaches one. Enable it with the `LogEnabled` setting (its `[SettingsEntry]` is `HideFromUI`, but `SettingsWindow.xaml:288-289` has an explicit "Enable Mod Manager Logs" checkbox), or by **dropping an
+extension-less file named `debug` next to the exe** (`MainWindow.xaml.cs:380`). The file also sets the VM-only `MainWindowViewModel.DebugMode`
+(`:325`, set at `MainWindow.xaml.cs:440-443`), which keeps logging on even when `LogEnabled` is false. The `DebugModeEnabled` setting ("Mod Developer Mode")
+does **not** enable logging; it only shows developer UI. Any unhandled exception or `DisplayError(msg)` also switches logging
+on (`MainWindow.xaml.cs:99,130,154`). `BuildRelease.py` does not remove a `debug` file, so one left in `bin\Publish` ships in the release zip and turns logging on
+for every user. Logs land in `<exe>/_Logs/`, and
 `LogTraceListener` scrubs `%LOCALAPPDATA%`/`%APPDATA%`/`%USERPROFILE%` — don't re-implement redaction.
 
 ```csharp
@@ -493,7 +607,7 @@ ShowAlert(message, AlertType.Info, timeoutSeconds);   // timeout 0 = until repla
 
 `ShowAlert` **already logs, already scrubs paths, and already marshals to the UI thread** — call it
 from any thread and don't add a redundant `DivinityApp.Log`. When the settings window is open, use
-`SettingsWindowViewModel.ShowAlert` instead. From Core, go via
+`SettingsWindowViewModel.ShowAlert` instead (its on-screen text skips `ReplaceSpecialPaths`, `SettingsWindowViewModel.cs:120-122`; the log copy is still scrubbed by `LogTraceListener`). From Core, go via
 `DivinityApp.Commands.ViewModel.ShowAlert(...)`.
 
 ---
@@ -513,7 +627,15 @@ from any thread and don't add a redundant `DivinityApp.Log`. When the settings w
   `Name` is display only.
 
 **A mod's UUID is not guaranteed to be a GUID** — override paks with no `meta.lsx` get
-`UUID = <full pak path>`. That's why `HasInvalidUUID` exists; never assume `Guid.Parse` succeeds.
+`UUID = <full pak path>`. Never assume `Guid.Parse` succeeds.
+`HasInvalidUUID` mostly misses these: `CheckForInvalidUUID` returns false unless `CanAddToLoadOrder`
+(`DivinityModData.cs:367-374`), and a meta-less override is not orderable until `ForceAllowInLoadOrder` is set (by the user, or by
+`LoadModOrder` at `MainWindowViewModel.cs:2126-2129`). It mainly flags orderable mods whose meta UUID is not a GUID, and only marks
+the row (`DivinityModData.cs:483-495`); such a mod is still exported. Master can also write an override's path into `modsettings.lsx`:
+the JSON text export includes `ForceLoadedMods` (`MainWindowViewModel.cs:3802-3809`), re-importing it (`DivinityModDataLoader.cs:1222-1239`)
+and loading it makes `LoadModOrder` set `ForceAllowInLoadOrder`, and `GenerateModSettingsFile` writes the path into a `type="guid"`
+attribute (`DivinityModDataLoader.cs:1471-1483`). On read-back the GUID parse throws, the error is swallowed (`:838-846`) and the order
+comes back empty. Guard every write with `Guid.TryParse`.
 
 ### Base-game knowledge lives in JSON, not code
 
@@ -525,8 +647,11 @@ from any thread and don't add a redundant `DivinityApp.Log`. When the settings w
 commits do):
 
 1. Bump the packed `Version` int of each changed Larian module.
-2. Add any new Larian module to **both** the `Mods` array **and** `IgnoreDependencies` — forgetting
-   the second produces a wave of false "missing dependency" reports.
+2. Add any new Larian module, with its UUID, to the `Mods` array. `DivinityModDataLoader.IgnoreModDependency`
+   (`:47-50`) already treats every `Mods` UUID as a satisfied dependency, and Larian paks found at load are added to
+   `IgnoredMods` automatically (`MainWindowViewModel.cs:1501-1509`). `IgnoreDependencies` is needed only for a UUID that
+   should count as installed without being in `Mods`. Upstream lists 16 of its 20 modules in both (Engine, Game, MainUI
+   and CrossplayUI are only in `Mods`); copying that convention is harmless and keeps diffs against upstream small.
 3. If Larian ships a new campaign module, change `MAIN_CAMPAIGN_UUID` plus the `ModType="Adventure"`
    special-case and the export fallback chain.
 
@@ -557,6 +682,12 @@ reordering an attribute means matching the argument list exactly.
 `IsForceLoadedMergedMod` or the user sets `ForceAllowInLoadOrder`. Bugs reported as "my mod won't
 appear in the list" are usually this, not a loading failure.
 
+**Duplicate paks with equal versions:** `LoadModPackageDataAsync` keeps the first copy it enumerates from a `ConcurrentBag`
+(strict `>` on version, `DivinityModDataLoader.cs:787-806`). When every add runs on one thread the bag enumerates in reverse
+insertion order, so the last pak added wins (the alphabetically last path when reads complete synchronously); otherwise the
+winner is timing-dependent and can change between launches. The loser is offered for deletion, pre-selected
+(`MainWindowViewModel.cs:1703-1709`).
+
 ### Known dead code — don't go looking for logic that isn't there
 
 - `src/Core/Models/Conflicts/*` — **entirely unreferenced.** There is no file-level conflict analysis.
@@ -565,9 +696,11 @@ appear in the list" are usually this, not a loading failure.
 - `src/GUI/Views/VerticalModLayout.xaml(.cs)` and `LeaderLibSettingsWindow.xaml(.cs)` — never instantiated.
 - The **"Mod Updates" view is dead UI** — `ModUpdatesViewData.Mods` is never populated and the
   `RefreshAllModUpdatesBackground()` call in `RefreshAsync` is commented out.
-- `DivinityApp.GetAppDirectory()` has a **dead statement** (`DivinityApp.cs:132`): it computes the
+- `DivinityApp.GetAppDirectory()` has a **dead statement** (`DivinityApp.cs:135`): it computes the
   process-path directory (comment says it's for Proton) and discards it, always returning
-  `AppContext.BaseDirectory`. Every settings/log/Orders path flows through this.
+  `AppContext.BaseDirectory`. Almost every settings/log/Orders path (28 call sites) flows through this; `_Lib`
+  (`Program.cs:40`), the `debug` marker (`MainWindow.xaml.cs:380`) and one export fallback (`MainWindowViewModel.cs:2608`)
+  use `AppDomain.CurrentDomain.BaseDirectory` directly.
 
 ---
 
@@ -575,7 +708,8 @@ appear in the list" are usually this, not a loading failure.
 
 `src/GUI/Resources/AppFeatures.json` is the master switch:
 `{"ScriptExtender": true, "NexusMods": false, "Workshop": false}`.
-**Nexus Mods code ships but is disabled**; `"Workshop"` is never even queried.
+**Nexus Mods code ships but is disabled**, though not completely: a non-empty `NexusModsAPIKey` still creates the client via
+`NexusModsDataLoader.Init` whatever the flag says (`MainWindowViewModel.cs:1056-1066`); update fetches stay gated by the flag (`:2273`). `"Workshop"` is never even queried.
 
 - **Nexus Mods** — API key is `[SettingsEntry(..., HideFromUI = true)]`, so there is **no UI field**;
   it is stored **plaintext** in `<exe>/Data/settings.json` and set by hand-editing. The release path
@@ -593,8 +727,10 @@ appear in the list" are usually this, not a loading failure.
   by default **only non-default values are serialized**, so a setting equal to its `[DefaultValue]`
   silently disappears from the file the extender reads.
 
-`WebHelper` **swallows every exception** and returns `Stream.Null` / `""` — silent network failure
-looks identical to "nothing to update".
+`WebHelper.DownloadFileAsStreamAsync` / `DownloadUrlAsStringAsync` **swallow every exception** (cancellation included)
+and return `Stream.Null` / `""` (`WebHelper.cs:18-44`); the `GetAsync`/`PostAsync` wrappers (`:11-16`) let exceptions through — silent network failure
+looks identical to "nothing to update". Because `Stream.Null` is never null, a call site's `if (webStream != null)` check
+(e.g. `MainWindowViewModel.cs:352`) is dead.
 
 ---
 
@@ -616,6 +752,12 @@ ones) **and** the root `Update.xml`. Note `GITHUB_USER` / `GITHUB_REPO` / `GITHU
 For personal use, setting `Settings.CheckForUpdates = false` is enough. The README's
 "only official source" wording and the ko-fi donation links would also need revisiting before any
 public distribution. Licence is **MIT, © 2019 LaughingLeader** — keep the copyright notice.
+
+**The update window has two confirmed bugs** (`src/GUI/ViewModels/AppUpdateWindowViewModel.cs`). A failed check
+(network or feed error) reports "up to date", because `OnUpdateCheckAsync` (`:54-107`) never reads `args.Error`. Cancelling or
+failing the download still reaches `Environment.Exit(0)` in `TryRunUpdate` (`:33-50`), which skips the close handlers (the load
+order is not saved). AutoUpdater 1.9.2 also checks no signature, and a non-zip download URL is started directly. Fix these before
+relying on the updater for a fork release.
 
 ### 8.2 ⚠ `.gitattributes` `merge=ours` — a latent trap
 
@@ -690,6 +832,12 @@ A workflow is a YAML file in `.github/workflows/` that GitHub runs on a hosted V
    `PreBuildEvent` is *not* an obstacle; it works on a clean runner.
 3. **No test project exists**, so CI can only prove "it compiles".
 4. Submodules are public, so `submodules: recursive` works without extra credentials.
+5. **Check which image `windows-latest` maps to.** If it is the Server 2025 / VS 2026 image, the v143 C++/CLI component
+   (`VC.14.44.17.14.CLI.Support`) may be missing and `LSLibNative` may fail to build [unverified: not checked against the
+   runner-images readme, not run]. Pin `windows-2022` for the .NET 8 build, or settle it with one test run. Pin action major
+   versions to whatever is current when the workflow is written.
+6. `LSLibStats` (built in every configuration, referenced by nothing) generates ten more parser files (five grammars) with the
+   same `!Exists` guards, so it carries a second copy of the first-build trap (§2.2).
 
 Value order for setting this fork up properly: **(1)** fix the two clean-checkout traps in §2.2 so
 a fresh clone builds in one pass, **(2)** a Debug-build CI workflow as a regression net,
@@ -704,7 +852,7 @@ a fresh clone builds in one pass, **(2)** a Debug-build CI workflow as a regress
 | `Publish`/`Release` fails in `NuGet...Pack.targets`, missing `bin\Debug\netstandard2.0` | CrossSpeak packs from a hardcoded Debug path; build `Debug` once first (§2.2) |
 | First build of a clean clone fails `CS0534`/`CS0246` | LSLib's generated parsers miss the `**/*.cs` glob; build twice (§2.2) |
 | Build output lands in `C:\bin\Debug\` | built a `.csproj`, not the `.sln` (§2.2) |
-| Script Extender update does nothing | built `Release\|x64` (Toolbox skipped) or GUI-only (§2.2) |
+| Script Extender update does nothing | built `Release\|x64` (Toolbox skipped) or GUI-only (§2.2); or `UpdateExtender` (`MainWindowViewModel.cs:418-450`) skipped or cut it short: `ScriptExtender` feature off, no `DWrite.dll` next to `bg3.exe`, `UpdaterVersion < 4`, or Toolbox killed after 120 s |
 | New setting doesn't persist / doesn't restore / doesn't show | missing one of `[DataMember]` / `[Reactive]` / `[SettingsEntry]` (§4) |
 | Extender settings UI stops updating | reassigned `Settings.ExtenderSettings` instead of mutating (§4) |
 | UI doesn't refresh when a property changes | `Filter` without `AutoRefresh`, or `ToUIProperty` where `ToUIPropertyImmediate` was needed (§4) |
@@ -712,7 +860,15 @@ a fresh clone builds in one pass, **(2)** a Debug-build CI workflow as a regress
 | Command throws, user sees nothing | no `ThrownExceptions`; handler only logs; logging is off by default (§4, §5) |
 | UUIDs match nothing | wrong `ByteSwapGuids` setting (§6) |
 | Mod won't appear in the load order | it's force-loaded/override, by design (§6) |
-| Mass "missing dependency" after a patch | new Larian module missing from `IgnoreDependencies` (§6) |
+| Mass "missing dependency" after a patch | new Larian module missing from `IgnoredMods.json`'s `Mods` array (§6) |
 | Edited `Resources/*.json`, nothing changed | runtime reads `<exe>/Resources`, needs a rebuild (§6) |
 | Works in Debug, fails in Publish | the `_Lib` flattening + `AssemblyResolve` hook (§2.4) |
 | Fork build updates itself to upstream | `URL_UPDATE` still points at LaughingLeader (§8.1) |
+| Window position / admin-warning opt-out forgotten on restart | `Settings.Window`/`Confirmations` are `[DataMember]` without `[Reactive]`, so `SetFrom` never restores them (§4) |
+| `modsettings.lsx` comes back empty after a save | a non-GUID UUID (override pak path) was written; one unparseable entry empties the whole read (§6) |
+| Saved an order and `modsettings.lsx` now holds JSON | an archive import with an order named `Current` ran the generic `SetFrom` over the Current order, copying `IsModSettings = false` (`MainWindowViewModel.cs:3112-3126`) |
+| App vanishes with no message on Save or Export | stack overflow: a mod lists itself (or two mods list each other) as dependencies; `GetDependencyMods` has no cycle guard (`DivinityModDataLoader.cs:1400-1429`) |
+| Crash on every launch after rebinding a hotkey | a plain letter or digit was bound; `KeyGesture` rejects it when `MainViewControl.xaml.cs:37` rebuilds the bindings at startup. Delete or fix `Data/keybindings.json` |
+| Stuck on "Loading...", every button disabled | an exception inside a `ScheduleAsync` body was dropped and `IsRefreshing` / `IsLoadingOrder` stayed true (§4 Threading) |
+| Window freezes ("Not Responding") during the mod scan | likely (code-traced, not yet observed): `RefreshAsync` continues on the UI thread after its first `Observable.Start(MainThread)` await (§3 Startup order) |
+| Saved order lost the mods that weren't installed | `UpdateOrderFromActiveMods` rebuilds `Order` from loaded mods only (§4 DynamicData) |
