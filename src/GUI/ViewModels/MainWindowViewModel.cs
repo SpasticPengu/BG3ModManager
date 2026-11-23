@@ -339,8 +339,9 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 		MainProgressIsActive = true;
 
 		string dllDestination = Path.Combine(exeDir, DivinityApp.EXTENDER_UPDATER_FILE);
+		var progressDone = false;
 
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+		RunInBackground(async (ctrl, t) =>
 		{
 			int successes = 0;
 			Stream webStream = null;
@@ -384,6 +385,7 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 
 			await Observable.Start(() =>
 			{
+				progressDone = true;
 				OnMainProgressComplete();
 				if (successes >= 3)
 				{
@@ -407,6 +409,10 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 			if (!isLoggingEnabled) await Observable.Start(() => Window.ToggleLogging(false), RxApp.MainThreadScheduler);
 
 			return Disposable.Empty;
+		}, () =>
+		{
+			//The overlay may belong to another job by now
+			if (!progressDone) OnMainProgressComplete();
 		});
 	}
 
@@ -749,7 +755,7 @@ Directory the zip will be extracted to:
 	public void LoadExtenderSettingsBackground()
 	{
 		DivinityApp.Log($"Loading extender settings.");
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (c, t) =>
+		RunInBackground(async (c, t) =>
 		{
 			await CheckForLatestExtenderUpdaterRelease(t);
 			await LoadExtenderSettingsAsync(t);
@@ -900,7 +906,7 @@ Directory the zip will be extracted to:
 
 			if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
 			{
-				RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, t) =>
+				RunInBackground(async (sch, t) =>
 				{
 					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(GetLarianStudiosAppDataFolder(), !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
 				});
@@ -1894,7 +1900,7 @@ Directory the zip will be extracted to:
 				TotalFiles = files.Count()
 			};
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				var builtinMods = DivinityApp.IgnoredMods.Items.SafeToDictionary(x => x.Folder, x => x);
 				MainProgressToken = new CancellationTokenSource();
@@ -1965,6 +1971,10 @@ Directory the zip will be extracted to:
 					}
 				});
 				return Disposable.Empty;
+			}, () =>
+			{
+				IsRefreshing = false;
+				OnMainProgressComplete();
 			});
 		}
 	}
@@ -2266,7 +2276,7 @@ Directory the zip will be extracted to:
 	private void RefreshAllModUpdatesBackground()
 	{
 		IsRefreshingModUpdates = true;
-		var disposable = RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, cts) =>
+		var disposable = RunInBackground(async (sch, cts) =>
 		{
 			UpdateHandler.Workshop.SteamAppID = AppSettings.DefaultPathways.Steam.AppID;
 
@@ -2281,7 +2291,7 @@ Directory the zip will be extracted to:
 			await UpdateHandler.SaveAsync(UserMods, Version.ToString(), cts);
 
 			IsRefreshingModUpdates = false;
-		});
+		}, () => IsRefreshingModUpdates = false);
 	}
 
 	private async Task CheckForEmptyOrderAsync(IScheduler sch, CancellationToken token)
@@ -2554,7 +2564,7 @@ Directory the zip will be extracted to:
 		}, RxApp.MainThreadScheduler);
 		if (ActiveMods.Count == 0)
 		{
-			RxApp.TaskpoolScheduler.ScheduleAsync(CheckForEmptyOrderAsync);
+			RunInBackground(CheckForEmptyOrderAsync);
 		}
 		return Unit.Default;
 	}
@@ -2595,7 +2605,7 @@ Directory the zip will be extracted to:
 
 	private void SaveLoadOrder(bool skipSaveConfirmation = false)
 	{
-		RxApp.MainThreadScheduler.ScheduleAsync(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation));
+		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
 	private async Task<bool> SaveLoadOrderAsync(bool skipSaveConfirmation = false)
@@ -2844,11 +2854,11 @@ Directory the zip will be extracted to:
 
 	private void ExportLoadOrder()
 	{
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+		RunInBackground(async (ctrl, t) =>
 		{
 			await ExportLoadOrderAsync();
 			return Disposable.Empty;
-		});
+		}, () => IsLoadingOrder = false);
 	}
 
 	private async Task BackupCurrentLoadOrderAsync()
@@ -3040,6 +3050,37 @@ Directory the zip will be extracted to:
 		}
 	}
 
+	/// <summary>
+	/// Runs work on the task pool. A failure is logged and shown (RxApp.TaskpoolScheduler.ScheduleAsync alone drops it), then
+	/// onError runs on the UI thread so the caller can clear the busy state it set, instead of leaving the app locked.
+	/// </summary>
+	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task> work, Action onError = null, TimeSpan? dueTime = null)
+	{
+		return RxApp.TaskpoolScheduler.ScheduleAsyncSafe(work, ex => ReportBackgroundError(ex, onError), dueTime);
+	}
+
+	/// <summary>
+	/// Logs and shows an error from background work, then runs the job's cleanup (if any) on the UI thread.
+	/// </summary>
+	private void ReportBackgroundError(Exception ex, Action onError = null)
+	{
+		DivinityApp.Log($"Error in background work:\n{ex}");
+		ShowAlert($"Error: {ex.Message}", AlertType.Danger);
+		if (onError != null) RxApp.MainThreadScheduler.Schedule(onError);
+	}
+
+	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task<IDisposable>> work, Action onError = null, TimeSpan? dueTime = null)
+	{
+		return RunInBackground(async (sch, token) => { await work(sch, token); }, onError, dueTime);
+	}
+
+	private void ResetBusyState()
+	{
+		IsRefreshing = false;
+		IsLoadingOrder = false;
+		OnMainProgressComplete();
+	}
+
 	private static readonly ArchiveEncoding _archiveEncoding = new(Encoding.UTF8, Encoding.UTF8);
 	private static readonly ReaderOptions _importReaderOptions = new() { ArchiveEncoding = _archiveEncoding };
 	private static readonly WriterOptions _exportWriterOptions = new(CompressionType.Deflate) { ArchiveEncoding = _archiveEncoding };
@@ -3081,7 +3122,7 @@ Directory the zip will be extracted to:
 			{
 				TotalFiles = 1
 			};
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				var builtinMods = DivinityApp.IgnoredMods.Items.SafeToDictionary(x => x.Folder, x => x);
 				MainProgressToken = new CancellationTokenSource();
@@ -3159,7 +3200,7 @@ Directory the zip will be extracted to:
 					}
 				});
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -3541,14 +3582,14 @@ Directory the zip will be extracted to:
 			MainProgressWorkText = "";
 			MainProgressValue = 0d;
 			MainProgressIsActive = true;
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				MainProgressToken = new CancellationTokenSource();
 				await ExportLoadOrderToArchiveAsync("", MainProgressToken.Token);
 				await ctrl.Yield();
 				RxApp.MainThreadScheduler.Schedule(_ => OnMainProgressComplete());
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -3735,14 +3776,14 @@ Directory the zip will be extracted to:
 				MainProgressValue = 0d;
 				MainProgressIsActive = true;
 
-				RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+				RunInBackground(async (ctrl, t) =>
 				{
 					MainProgressToken = new CancellationTokenSource();
 					await ExportLoadOrderToArchiveAsync(dialog.FileName, MainProgressToken.Token);
 					await ctrl.Yield();
 					RxApp.MainThreadScheduler.Schedule(_ => OnMainProgressComplete());
 					return Disposable.Empty;
-				});
+				}, () => OnMainProgressComplete());
 			}
 		}
 		else
@@ -4148,7 +4189,7 @@ Directory the zip will be extracted to:
 		Window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
 		Window.TaskbarItemInfo.ProgressValue = 0;
 		IsRefreshing = true;
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, token) =>
+		RunInBackground(async (sch, token) =>
 		{
 			await RefreshAsync(sch, token);
 			if(ProcessHelper.IsCurrentProcessAdmin())
@@ -4169,7 +4210,7 @@ Directory the zip will be extracted to:
 					});
 				}
 			}
-		});
+		}, ResetBusyState);
 	}
 
 	public bool AutoChangedOrder { get; set; }
@@ -4428,7 +4469,7 @@ Directory the zip will be extracted to:
 
 			var openOutputPath = dialog.SelectedPath;
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				int successes = 0;
 				foreach (var path in SelectedPakMods.Select(x => x.FilePath))
@@ -4480,7 +4521,7 @@ Directory the zip will be extracted to:
 				});
 
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -4536,7 +4577,7 @@ Directory the zip will be extracted to:
 
 			var openOutputPath = dialog.SelectedPath;
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				if (MainProgressToken.IsCancellationRequested) return Disposable.Empty;
 				var path = SelectedAdventureMod.FilePath;
@@ -4576,7 +4617,7 @@ Directory the zip will be extracted to:
 				});
 
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -4992,7 +5033,7 @@ Directory the zip will be extracted to:
 			Window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
 			Window.TaskbarItemInfo.ProgressValue = 0;
 			IsRefreshing = true;
-			RxApp.TaskpoolScheduler.ScheduleAsync(RefreshAsync);
+			RunInBackground(RefreshAsync, ResetBusyState);
 		}, canRefreshObservable, RxApp.MainThreadScheduler);
 
 		Keys.Refresh.AddAction(() => RefreshCommand.Execute(Unit.Default).Subscribe(), canRefreshObservable);
@@ -5429,7 +5470,7 @@ Directory the zip will be extracted to:
 				//var exeName = !Settings.LaunchDX11 ? "bg3" : "bg3_dx11";
 				//var isGameRunning = Process.GetProcessesByName(exeName).Length > 0;
 				checkModSettingsTask?.Dispose();
-				checkModSettingsTask = RxApp.TaskpoolScheduler.ScheduleAsync(TimeSpan.FromSeconds(2), async (sch, cts) =>
+				checkModSettingsTask = RunInBackground(async (sch, cts) =>
 				{
 					var activeCount = ActiveMods.Count;
 					var modSettingsData = await DivinityModDataLoader.LoadModSettingsFileAsync(e.FullPath);
@@ -5447,7 +5488,7 @@ Directory the zip will be extracted to:
 						});
 					}
 					HasExported = false;
-				});
+				}, dueTime: TimeSpan.FromSeconds(2));
 			}
 		});
 	}
