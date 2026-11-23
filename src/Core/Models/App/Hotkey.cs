@@ -104,6 +104,23 @@ public class Hotkey : ReactiveObject, IHotkey
 		DisplayBindingText = ToString();
 	}
 
+	/// <summary>
+	/// Whether WPF accepts the pair as a key gesture. It refuses a letter or digit unless Ctrl, Alt or Windows is held,
+	/// since that would fire while typing, and a KeyBinding built from such a pair throws.
+	/// </summary>
+	public static bool IsValidGesture(Key key, ModifierKeys modifiers)
+	{
+		try
+		{
+			_ = new KeyGesture(key, modifiers);
+			return true;
+		}
+		catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
+		{
+			return false;
+		}
+	}
+
 	public Hotkey(Key key = Key.None, ModifierKeys modifiers = ModifierKeys.None)
 	{
 		DisplayName = "";
