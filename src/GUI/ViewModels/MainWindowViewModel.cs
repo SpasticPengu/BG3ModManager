@@ -2110,6 +2110,9 @@ Directory the zip will be extracted to:
 		}
 	}
 
+	/// <summary>The order the active list was last loaded from (or found to match), so a selection that only moves to a new index is not reloaded.</summary>
+	private DivinityLoadOrder _loadedModOrder;
+
 	public bool LoadModOrder(DivinityLoadOrder order)
 	{
 		if (order == null) return false;
@@ -2173,6 +2176,7 @@ Directory the zip will be extracted to:
 		}
 
 		OrderJustLoaded = true;
+		_loadedModOrder = order;
 
 		IsLoadingOrder = false;
 		return true;
@@ -2643,11 +2647,13 @@ Directory the zip will be extracted to:
 				outputPath = SelectedModOrder.FilePath;
 			}
 
+			var exportedToGame = false;
 			try
 			{
 				if (SelectedModOrder.IsModSettings)
 				{
 					//When saving the "Current" order, write this to modsettings.lsx instead of a json file.
+					exportedToGame = true;
 					result = await ExportLoadOrderAsync();
 					outputPath = Path.Join(SelectedProfile.Folder, "modsettings.lsx");
 					_modSettingsWatcher.PauseWatcher(true, 1000);
@@ -2663,7 +2669,8 @@ Directory the zip will be extracted to:
 				result = false;
 			}
 
-			if (result && !skipSaveConfirmation)
+			// The export already reported its outcome (success, or which mods it left out); a Success alert here would replace it
+			if (result && !skipSaveConfirmation && !exportedToGame)
 			{
 				ShowAlert($"Saved mod load order to '{outputPath}'", AlertType.Success, 10);
 			}
@@ -2874,14 +2881,16 @@ Directory the zip will be extracted to:
 	/// </summary>
 	private static bool IsWrittenOnExport(DivinityLoadOrderEntry entry) => !entry.Missing && Guid.TryParse(entry.UUID, out _);
 
-	private async Task BackupCurrentLoadOrderAsync()
+	/// <param name="exportedOrder">The order that was exported.</param>
+	/// <param name="writtenEntries">Its entries that were written to modsettings.lsx (IsWrittenOnExport), taken before the write.</param>
+	private async Task BackupCurrentLoadOrderAsync(DivinityLoadOrder exportedOrder, List<DivinityLoadOrderEntry> writtenEntries)
 	{
 		var backupOrderPath = Path.Combine(GetOrdersDirectory(), DivinityApp.PATH_LAST_EXPORTED_NAME + ".json");
 		try
 		{
 			var backupOrder = new DivinityLoadOrder { Name = DivinityApp.PATH_LAST_EXPORTED_NAME, FilePath = backupOrderPath };
 			//Back up what was written to the game
-			backupOrder.SetOrder(SelectedModOrder.Order.Where(IsWrittenOnExport));
+			backupOrder.SetOrder(writtenEntries);
 
 			await DivinityModDataLoader.ExportLoadOrderToFileAsync(backupOrderPath, backupOrder);
 			var updatedOrder = false;
@@ -2889,7 +2898,9 @@ Directory the zip will be extracted to:
 			{
 				if (order.FilePath == backupOrderPath)
 				{
-					order.SetOrder(backupOrder);
+					// When LastExported itself was exported, only its file changes: the order on screen keeps its missing
+					// and non-GUID entries, so the list stays as the user left it and the missing-mods notice still lists them
+					if (!ReferenceEquals(order, exportedOrder)) order.SetOrder(backupOrder);
 					updatedOrder = true;
 				}
 			}
@@ -2937,7 +2948,16 @@ Directory the zip will be extracted to:
 			UpdateOrderFromActiveMods();
 			DeleteModCrashSanityCheck();
 
-			var outputAdventureMod = SelectedAdventureMod;
+			// One snapshot of what is exported: the window stays usable during the awaits below, so the selected order,
+			// its entries or the profile can change before the write finishes; everything after it uses only this snapshot
+			var exportOrder = SelectedModOrder;
+			var exportProfile = SelectedProfile;
+			var exportAdventureMod = SelectedAdventureMod;
+			var orderSnapshot = exportOrder.Clone();
+			var writtenEntries = orderSnapshot.Order.Where(IsWrittenOnExport).ToList();
+			var hasInstalledEntries = orderSnapshot.Order.Any(x => !x.Missing);
+
+			var outputAdventureMod = exportAdventureMod;
 			if (outputAdventureMod == null)
 			{
 				var gustavX = mods.Lookup(DivinityApp.GUSTAVX_UUID);
@@ -2963,24 +2983,33 @@ Directory the zip will be extracted to:
 					}
 				}
 			}
-			string outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
-			var finalOrder = DivinityModDataLoader.BuildOutputList(SelectedModOrder.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, outputAdventureMod);
-			var result = await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder);
+			string outputPath = Path.Combine(exportProfile.Folder, "modsettings.lsx");
+			var finalOrder = DivinityModDataLoader.BuildOutputList(orderSnapshot.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, outputAdventureMod);
+			var result = await DivinityModDataLoader.ExportModSettingsToFileAsync(exportProfile.Folder, finalOrder);
 
 			// Only a successful export replaces the LastExported backup
-			if (result) await BackupCurrentLoadOrderAsync();
+			if (result) await BackupCurrentLoadOrderAsync(exportOrder, writtenEntries);
 
 			var dir = GetLarianStudiosAppDataFolder();
-			if (SelectedModOrder.Order.Any(x => !x.Missing))
+			try
 			{
-				await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, false, false, true);
-			}
-			else
-			{
-				if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
+				if (hasInstalledEntries)
 				{
-					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
+					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, false, false, true);
 				}
+				else
+				{
+					if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
+					{
+						await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				// Secondary to the export (for example a read-only preferences.json): modsettings.lsx is already written,
+				// so this must not turn the export into a failure or skip updating Current and the profile below
+				DivinityApp.Log($"Error updating the launcher preferences in '{dir}':\n{ex}");
 			}
 
 			if (result)
@@ -2998,29 +3027,28 @@ Directory the zip will be extracted to:
 						ShowAlert($"Exported load order to '{outputPath}'", AlertType.Success, 15);
 					}
 
-					if (DivinityModDataLoader.ExportedSelectedProfile(PathwayData.AppDataProfilesPath, SelectedProfile.UUID))
+					if (DivinityModDataLoader.ExportedSelectedProfile(PathwayData.AppDataProfilesPath, exportProfile.UUID))
 					{
-						DivinityApp.Log($"Set active profile to '{SelectedProfile.Name}'");
+						DivinityApp.Log($"Set active profile to '{exportProfile.Name}'");
 					}
 					else
 					{
-						DivinityApp.Log($"Could not set active profile to '{SelectedProfile.Name}'");
+						DivinityApp.Log($"Could not set active profile to '{exportProfile.Name}'");
 					}
 
 					//Update "Current" order to mirror what was written
-					var exportedEntries = SelectedModOrder.Order.Where(IsWrittenOnExport).ToList();
-					if (!SelectedModOrder.IsModSettings)
+					if (!exportOrder.IsModSettings)
 					{
-						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(exportedEntries);
+						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(writtenEntries);
 					}
 
 					List<string> orderList = [];
-					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(exportedEntries.Select(x => x.UUID));
+					if (exportAdventureMod != null) orderList.Add(exportAdventureMod.UUID);
+					orderList.AddRange(writtenEntries.Select(x => x.UUID));
 
-					SelectedProfile.ActiveMods.Clear();
-					SelectedProfile.ActiveMods.AddRange(orderList.Select(x => ProfileActiveModDataFromUUID(x)));
-					DisplayMissingMods(SelectedModOrder);
+					exportProfile.ActiveMods.Clear();
+					exportProfile.ActiveMods.AddRange(orderList.Select(x => ProfileActiveModDataFromUUID(x)));
+					DisplayMissingMods(orderSnapshot);
 
 					HasExported = true;
 
@@ -3032,7 +3060,7 @@ Directory the zip will be extracted to:
 			{
 				await Observable.Start(() =>
 				{
-					string msg = $"Problem exporting load order to '{outputPath}'. The file was left unchanged. Is it locked or read-only? Export also stops if the new file could not be read back, for example because a mod's ID is not a valid UUID.";
+					string msg = $"Problem exporting load order to '{outputPath}'. The file was left unchanged. Is it locked or read-only? Export also stops if the new file could not be read back the way the game reads it.";
 					ShowAlert(msg, AlertType.Danger);
 					View.MainWindowMessageBox_OK.WindowBackground = MainViewControl.MessageBoxErrorBackgroundBrush;
 					View.MainWindowMessageBox_OK.Closed += MainWindowMessageBox_Closed_ResetColor;
@@ -5295,7 +5323,14 @@ Directory the zip will be extracted to:
 			{
 				if (SelectedModOrder != null && !IsLoadingOrder)
 				{
-					if (!SelectedModOrder.OrderEquals(ActiveMods.Select(x => x.UUID)))
+					if (ReferenceEquals(SelectedModOrder, _loadedModOrder))
+					{
+						// The same order at a new index, because an order was inserted or removed before it (the first export adds
+						// LastExported at index 1). The active list already shows it; reloading would drop the selection and,
+						// since an order keeps its missing entries, OrderEquals below would never match it.
+						DivinityApp.Log($"Order {SelectedModOrder.Name} moved to index {SelectedModOrderIndex}. Skipping list loading since it is already loaded.");
+					}
+					else if (!SelectedModOrder.OrderEquals(ActiveMods.Select(x => x.UUID)))
 					{
 						if (LoadModOrder(SelectedModOrder))
 						{
@@ -5309,6 +5344,7 @@ Directory the zip will be extracted to:
 					else
 					{
 						DivinityApp.Log($"Order changed to {SelectedModOrder.Name}. Skipping list loading since the orders match.");
+						_loadedModOrder = SelectedModOrder;
 					}
 				}
 			}

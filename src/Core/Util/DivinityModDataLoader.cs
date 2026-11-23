@@ -839,7 +839,9 @@ public static partial class DivinityModDataLoader
 		return null;
 	}
 
-	public static async Task<ModSettingsParseResults> LoadModSettingsFileAsync(string path)
+	/// <param name="strict">Read only the way LSLib (and the game) reads the file: no entry-by-entry fallback,
+	/// and ReadError is set when LSLib rejects it.</param>
+	public static async Task<ModSettingsParseResults> LoadModSettingsFileAsync(string path, bool strict = false)
 	{
 		var activeMods = new List<DivinityProfileActiveModData>();
 		string readError = null;
@@ -858,9 +860,16 @@ public static partial class DivinityModDataLoader
 
 			if (modSettingsRes == null)
 			{
-				// LSLib rejects the whole file when one value doesn't parse (a UUID that isn't a GUID, a Version64 over int64),
-				// which read as an empty order; read the entries one by one instead and skip only the bad ones
-				readError = LoadModSettingsEntriesFromXml(path, activeMods);
+				if (strict)
+				{
+					readError = "LSLib could not read the file";
+				}
+				else
+				{
+					// LSLib rejects the whole file when one value doesn't parse (a UUID that isn't a GUID, a Version64 over int64),
+					// which read as an empty order; read the entries one by one instead and skip only the bad ones
+					readError = LoadModSettingsEntriesFromXml(path, activeMods);
+				}
 			}
 
 			if (modSettingsRes != null && modSettingsRes.Regions.ContainsKey("ModuleSettings") && modSettingsRes.Regions.TryGetValue("ModuleSettings", out var region))
@@ -1408,14 +1417,17 @@ public static partial class DivinityModDataLoader
 				xml.WriteTo(xw);
 
 				var buffer = Encoding.UTF8.GetBytes(sw.ToString());
-				// Never swap in a file this app can't read back: one mod ID that isn't a GUID, or a version over 2^63,
-				// makes the whole file unreadable. The previous file is kept as modsettings.lsx.bg3mm.bak (users keep their own .bak).
+				// Never swap in a file LSLib (the game's format) can't read back: one mod ID that isn't a GUID, or a version over 2^63,
+				// makes the whole file unreadable. Strict, so the app's own entry-by-entry fallback reader can't hide that.
+				// The previous file is kept as modsettings.lsx.bg3mm.bak (users keep their own .bak).
 				var expected = xml.SelectNodes("//node[@id='ModuleShortDesc']/attribute[@id='UUID']/@value").Cast<XmlNode>().Count(x => !IgnoreMod(x.Value));
 				return await DivinityFileUtils.WriteFileSafelyAsync(outputFilePath, buffer, outputFilePath + ".bg3mm.bak", async tempPath =>
 				{
-					var readBack = (await LoadModSettingsFileAsync(tempPath)).ActiveMods.Count;
-					if (readBack != expected) DivinityApp.Log($"Not replacing '{outputFilePath}': only {readBack} of {expected} mods could be read back from the new file");
-					return readBack == expected;
+					var readResult = await LoadModSettingsFileAsync(tempPath, true);
+					var readBack = readResult.ActiveMods.Count;
+					if (readResult.ReadError != null) DivinityApp.Log($"Not replacing '{outputFilePath}': the new file could not be read back ({readResult.ReadError})");
+					else if (readBack != expected) DivinityApp.Log($"Not replacing '{outputFilePath}': only {readBack} of {expected} mods could be read back from the new file");
+					return readResult.ReadError == null && readBack == expected;
 				});
 			}
 			catch (AccessViolationException ex)
