@@ -5,8 +5,8 @@ The plan for the SpasticPengu fork of BG3 Mod Manager. Work that could also help
 without dragging fork-only changes along with it.
 
 - **Based on:** the original project's `master` branch (a Windows app built with WPF on .NET 8)
-- **Fork work so far:** 20 commits on 7 branches; `master` itself is untouched
-- **Status:** Stage F under way (5 of 11 fixes done, not pushed); smoother scrolling (6.1) is paused
+- **Fork work so far:** 22 commits on 9 branches; `master` itself is untouched
+- **Status:** Stage F under way (7 of 11 fixes done, not pushed); smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -48,9 +48,9 @@ down keep the technical detail for whoever does the work.
 
 1. **Fix the bugs that lose data or crash the app** ([Stage F](#stageF)). Each fix is small and gets its
    own branch, so it can be offered to the original author too. *Decided 23 November: this goes first,
-   in the order of the Stage F checklist below.* **Next up: fix 6, Export to game** (`fix/export-to-game`),
-   in a new chat; start at [Stage F progress](#stageFprogress), which says how the first five were done
-   and checked.
+   in the order of the Stage F checklist below.* **Next up: fix 8, never write a broken mod ID into the
+   game's mod list** (`fix/modsettings-write-guard`); start at [Stage F progress](#stageFprogress), which
+   says how the others were done and checked.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -67,8 +67,8 @@ down keep the technical detail for whoever does the work.
   donation links (Stage 1), whether fuzzy search reorders the active list (Stage 5), and the open
   questions on overrides and categories (Stage 6).
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
-- **Stage F:** offer each fix to the original author as it is done, or all of Stage F together at the end?
-  (The real-app check of fixes 1 to 5 is done: it passed.)
+- **Stage F upstream:** *decided 23 November:* no fix is offered on its own. All of Stage F may be offered
+  together once it is finished, and even that is still only a maybe: ask again at the end of Stage F.
 
 ### Housekeeping
 
@@ -109,8 +109,10 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
 - [x] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`, `c8c21eed`)
 - [x] One real launch of the app to confirm the five fixes above (23 November, all 17 checks passed), plus an
   independent review whose findings are fixed in follow-up commits (see [Stage F progress](#stageFprogress))
-- [ ] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`)
-- [ ] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`)
+- [x] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`, `1ff34c38`).
+  Also: it refuses to write a list the game couldn't read, and saved orders can no longer be left half-written
+- [x] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`, `4238fba4`). On your
+  orders a Yes would have overwritten "5 Player - Hard UW"; one backup per profile is left for later (rarely matters)
 - [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
 - [ ] Updater: no "up to date" after a failed check, no closing on a cancelled download (`fix/updater-errors`)
 - [ ] A booby-trapped mod can't write outside the Mods folder (`fix/path-containment`)
@@ -193,6 +195,7 @@ A fork of LaughingLeader's BG3 Mod Manager, primarily for the owner and friends,
 | Base branch | **upstream/master** (WPF) | The circleainn/BG3ModManager-Redux fork proves a modern UI and every wanted feature is achievable on this exact stack (WPF, .NET 8). `upstream/avalonia` is 944 commits ahead but unfinished, unreleased, 6 months stale, and on `Avalonia 12.0.0-preview1`. |
 | Platforms | Windows now, Linux kept open | Steam Deck support was rated "nice, not a driver". Stages note where a future Avalonia port would invalidate work; toolkit-neutral choices preferred where free. |
 | Upstream contribution | Bugfixes and perf only | Drives the whole ordering — see §3. |
+| Stage F upstreaming (2026-11-23) | Not fix by fix; maybe all of Stage F together at the end | Undecided whether to offer at all; the branches stay upstream-clean so the option stays open. Ask again when Stage F is finished. |
 | Categories implementation | **Not** via WPF grouping | See the landmine in Stage 6. `CollectionViewSource` grouping would set `IsGrouping=True`, firing an existing template trigger that disables `CanContentScroll` and kills virtualization. |
 | Reuse of Redux code | General ideas only | Redux is MIT and reuse with attribution would be permitted; the owner chose a stricter stance. Honoured throughout. |
 
