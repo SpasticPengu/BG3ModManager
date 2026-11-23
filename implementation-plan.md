@@ -90,7 +90,8 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
 - [x] Save or Export crashes when mods depend on each other in a loop (`fix/dependency-cycle`, `9f854767`). Also
   fixed: Export silently left out a dependency's own dependencies. None of your mods loop; 3 of your saved orders
   were missing one such dependency each
-- [ ] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`)
+- [x] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`, `bb07d2bf`). 13 of your 16
+  saved orders hold 1 to 16 such mods each; a Save would have deleted them
 - [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
 - [ ] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`)
 - [ ] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`)
