@@ -2959,6 +2959,8 @@ Directory the zip will be extracted to:
 			var exportOrder = SelectedModOrder;
 			var exportProfile = SelectedProfile;
 			var exportAdventureMod = SelectedAdventureMod;
+			// A profile switch during the awaits replaces the Current order: mirror into this profile's one only
+			var exportCurrent = ModOrderList.FirstOrDefault(x => x.IsModSettings);
 			var orderSnapshot = exportOrder.Clone();
 			var writtenEntries = orderSnapshot.Order.Where(IsWrittenOnExport).ToList();
 			var hasInstalledEntries = orderSnapshot.Order.Any(x => !x.Missing);
@@ -3045,7 +3047,7 @@ Directory the zip will be extracted to:
 					//Update "Current" order to mirror what was written
 					if (!exportOrder.IsModSettings)
 					{
-						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(writtenEntries);
+						exportCurrent?.SetOrder(writtenEntries);
 					}
 
 					List<string> orderList = [];
