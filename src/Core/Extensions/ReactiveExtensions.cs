@@ -35,6 +35,26 @@ public static class ReactiveExtensions
 		return obs.ToPropertyEx(source, property, initialValue, false, RxApp.MainThreadScheduler);
 	}
 
+	/// <summary>
+	/// ScheduleAsync, except that an exception thrown by the work is passed to onError. Rx's ScheduleAsync only handles
+	/// OperationCanceledException and drops anything else, so the failure never reaches an exception handler.
+	/// </summary>
+	public static IDisposable ScheduleAsyncSafe(this IScheduler scheduler, Func<IScheduler, CancellationToken, Task> work, Action<Exception> onError, TimeSpan? dueTime = null)
+	{
+		async Task SafeWork(IScheduler sch, CancellationToken token)
+		{
+			try
+			{
+				await work(sch, token);
+			}
+			catch (Exception ex) when (ex is not OperationCanceledException)
+			{
+				onError(ex);
+			}
+		}
+		return dueTime.HasValue ? scheduler.ScheduleAsync(dueTime.Value, SafeWork) : scheduler.ScheduleAsync(SafeWork);
+	}
+
 	#region Debounce
 
 	//Source: https://github.com/dotnet/reactive/issues/395#issuecomment-1252835057

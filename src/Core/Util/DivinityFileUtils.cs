@@ -238,6 +238,52 @@ public static class DivinityFileUtils
 	}
 	#endregion
 
+	/// <summary>
+	/// The full path that Path.Join(rootDirectory, relativePath) lands on, or null when that is outside rootDirectory, as a
+	/// name with "..\" segments taken from a mod can be. LSLib builds extraction paths with Path.Join the same way.
+	/// </summary>
+	public static string GetContainedPath(string rootDirectory, string relativePath)
+	{
+		if (String.IsNullOrWhiteSpace(rootDirectory) || String.IsNullOrWhiteSpace(relativePath)) return null;
+		try
+		{
+			var root = Path.GetFullPath(rootDirectory);
+			if (!Path.EndsInDirectorySeparator(root)) root += Path.DirectorySeparatorChar;
+			var fullPath = Path.GetFullPath(Path.Join(root, relativePath));
+			// Ordinal: a path that stays inside keeps root's exact text, while "..\mods" from "Mods" may be another folder
+			// where folder names are case-sensitive
+			if (fullPath.Length > root.Length && fullPath.StartsWith(root, StringComparison.Ordinal)) return fullPath;
+		}
+		catch (Exception ex)
+		{
+			DivinityApp.Log($"Error resolving '{relativePath}' inside '{rootDirectory}':\n{ex}");
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Extracts a pak, skipping any file whose name would land outside outputDirectory (a crafted pak can name its files
+	/// "..\..\something"). Returns false when files were skipped.
+	/// </summary>
+	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.</param>
+	private static bool UncompressPackageContained(string pakPath, string outputDirectory, Func<PackagedFileInfo, bool> filter = null, List<string> skipped = null)
+	{
+		skipped ??= new List<string>();
+		var skippedBefore = skipped.Count;
+		var packager = new Packager();
+		packager.UncompressPackage(pakPath, outputDirectory, f =>
+		{
+			if (filter != null && !filter(f)) return false;
+			if (f.IsDeletion() || GetContainedPath(outputDirectory, f.Name) != null) return true;
+			skipped.Add(f.Name);
+			return false;
+		});
+		var skippedHere = skipped.Count - skippedBefore;
+		if (skippedHere == 0) return true;
+		DivinityApp.Log($"Skipped {skippedHere} file(s) in '{pakPath}' that would be written outside '{outputDirectory}':\n\t{String.Join("\n\t", skipped.Skip(skippedBefore))}");
+		return false;
+	}
+
 	public static bool ExtractPackages(IEnumerable<string> pakPaths, string outputDirectory)
 	{
 		var success = 0;
@@ -254,9 +300,7 @@ public static class DivinityFileUtils
 				{
 					destination = outputDirectory;
 				}
-				var packager = new Packager();
-				packager.UncompressPackage(path, destination, null);
-				success++;
+				if (UncompressPackageContained(path, destination)) success++;
 			}
 			catch (Exception ex)
 			{
@@ -270,9 +314,7 @@ public static class DivinityFileUtils
 	{
 		try
 		{
-			var packager = new Packager();
-			packager.UncompressPackage(pakPath, outputDirectory, null);
-			return true;
+			return UncompressPackageContained(pakPath, outputDirectory);
 		}
 		catch (Exception ex)
 		{
@@ -281,7 +323,10 @@ public static class DivinityFileUtils
 		}
 	}
 
-	public static async Task<bool> ExtractPackageAsync(string pakPath, string outputDirectory, CancellationToken token, Func<PackagedFileInfo, bool>? filter = null)
+	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.
+	/// When it is given, an error while extracting is thrown instead of returning false, so a caller can tell a pak that
+	/// failed apart from one whose only problem was the skipped entries.</param>
+	public static async Task<bool> ExtractPackageAsync(string pakPath, string outputDirectory, CancellationToken token, Func<PackagedFileInfo, bool>? filter = null, List<string> skipped = null)
 	{
 		var task = await Task.Run(async () =>
 		{
@@ -290,11 +335,13 @@ public static class DivinityFileUtils
 			{
 				try
 				{
-					var packager = new Packager();
-					packager.UncompressPackage(pakPath, outputDirectory, filter);
-					return true;
+					return UncompressPackageContained(pakPath, outputDirectory, filter, skipped);
 				}
-				catch (Exception) { return false; }
+				catch (Exception)
+				{
+					if (skipped != null) throw;
+					return false;
+				}
 			}, TaskCreationOptions.AttachedToParent);
 
 			var awaiter = childTask.GetAwaiter();
@@ -337,6 +384,47 @@ public static class DivinityFileUtils
 		{
 			DivinityApp.Log($"Error writing file: {ex}");
 			return false;
+		}
+	}
+
+	/// <summary>
+	/// Replaces a file without ever leaving it half-written: the bytes go to a temporary file next to it, which one rename then
+	/// swaps in. If backupPath is set, the previous file is copied there first. If verify is set, it gets the temporary file's
+	/// path, and the swap only happens when it returns true.
+	/// </summary>
+	/// <returns>False when verify refused the new file. Throws when writing or swapping fails. In both cases the target is unchanged.</returns>
+	public static async Task<bool> WriteFileSafelyAsync(string path, byte[] contents, string backupPath = null, Func<string, Task<bool>> verify = null)
+	{
+		// A symbolic link stays a link: replace the file it points to (LinkTarget is null for a missing file or a plain one)
+		var info = new FileInfo(path);
+		if (info.LinkTarget != null) path = info.ResolveLinkTarget(true)?.FullName ?? path;
+		// A unique name, so two writes of the same file at once can't use or delete each other's temporary file
+		var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
+		try
+		{
+			using (var fs = new System.IO.FileStream(tempPath, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None, 4096, true))
+			{
+				await fs.WriteAsync(contents);
+				fs.Flush(true);
+			}
+			if (verify != null && !await verify(tempPath))
+			{
+				File.Delete(tempPath);
+				return false;
+			}
+			if (backupPath != null && File.Exists(path))
+			{
+				// File.Copy keeps a read-only attribute, which would block the next backup
+				if (File.Exists(backupPath)) File.SetAttributes(backupPath, FileAttributes.Normal);
+				File.Copy(path, backupPath, true);
+			}
+			File.Move(tempPath, path, true);
+			return true;
+		}
+		catch
+		{
+			try { File.Delete(tempPath); } catch { }
+			throw;
 		}
 	}
 

@@ -282,14 +282,66 @@ public class DivinityLoadOrder : ReactiveObject
 
 	public void SetOrder(IEnumerable<DivinityLoadOrderEntry> nextOrder)
 	{
+		// Copy first: nextOrder may be this order's own list, or a query over it, which Clear would empty
+		var entries = nextOrder.ToList();
 		Order.Clear();
-		Order.AddRange(nextOrder);
+		Order.AddRange(entries);
 	}
 
 	public void SetOrder(DivinityLoadOrder nextOrder)
 	{
+		SetOrder(nextOrder.Order);
+	}
+
+	/// <summary>
+	/// Rebuilds the order from the active mods. Entries marked Missing (mods that weren't installed when the order was loaded)
+	/// have no active mod, so they are put back after the entry they followed instead of being dropped.
+	/// An entry whose mod is installed now (isInstalled) stops being Missing, so the active mods decide whether it stays.
+	/// The new order is built aside and swapped in at the end, so Order is only incomplete between its Clear and AddRange.
+	/// </summary>
+	public void UpdateFrom(IEnumerable<DivinityModData> activeMods, Func<string, bool> isInstalled)
+	{
+		var previousOrder = Order.ToList();
+		var rebuilt = activeMods.Where(x => x != null).Select(x => x.ToOrderEntry()).ToList();
+		var result = rebuilt;
+
+		foreach (var entry in previousOrder)
+		{
+			if (entry.Missing && isInstalled(entry.UUID))
+			{
+				entry.Missing = false;
+			}
+		}
+
+		if (previousOrder.Any(x => x.Missing))
+		{
+			//File each missing entry under the nearest earlier entry that is still in the order (null = the start)
+			var present = rebuilt.Select(x => x.UUID).ToHashSet();
+			string anchor = null;
+			var missing = new List<(string Anchor, DivinityLoadOrderEntry Entry)>();
+			foreach (var entry in previousOrder)
+			{
+				if (present.Contains(entry.UUID))
+				{
+					anchor = entry.UUID;
+				}
+				else if (entry.Missing)
+				{
+					missing.Add((anchor, entry));
+				}
+			}
+			var missingAfter = missing.ToLookup(x => x.Anchor, x => x.Entry);
+			result = new List<DivinityLoadOrderEntry>(rebuilt.Count + missing.Count);
+			result.AddRange(missingAfter[null]);
+			foreach (var entry in rebuilt)
+			{
+				result.Add(entry);
+				result.AddRange(missingAfter[entry.UUID]);
+			}
+		}
+
 		Order.Clear();
-		Order.AddRange(nextOrder.Order);
+		Order.AddRange(result);
 	}
 
 	public bool OrderEquals(IEnumerable<string> orderList)

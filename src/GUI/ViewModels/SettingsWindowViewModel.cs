@@ -227,7 +227,11 @@ public class SettingsWindowViewModel : ReactiveObject
 	{
 		_manifestFetchingTask?.Dispose();
 		_lastManifestCheck = DateTimeOffset.Now.ToUnixTimeSeconds();
-		_manifestFetchingTask = RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, cts) => await GetExtenderUpdatesAsync(channel, cts));
+		_manifestFetchingTask = RxApp.TaskpoolScheduler.ScheduleAsyncSafe(async (sch, cts) => await GetExtenderUpdatesAsync(channel, cts), ex =>
+		{
+			DivinityApp.Log($"Error checking for Script Extender updates:\n{ex}");
+			ShowAlert($"Error checking for Script Extender updates: {ex.Message}", AlertType.Danger);
+		});
 	}
 
 	private void FetchLatestManifestData(ExtenderUpdateChannel channel, bool force = false)

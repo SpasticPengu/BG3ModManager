@@ -53,6 +53,17 @@ public static partial class DivinityModDataLoader
 	{
 		return DivinityApp.IgnoredMods.Items.Any(m => m.Folder.Equals(Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), SCOMP));
 	}
+	/// <summary>
+	/// Whether a mod loaded from the game's Data folder may be offered for deletion because a Mods pak has its UUID.
+	/// Never a Larian module, and never a Data pak that other loaded modules also come from (Game.pak, Gustav.pak, ...):
+	/// a user pak that reuses a game module's UUID would otherwise get the game's own pak offered for deletion.
+	/// </summary>
+	public static bool CanDeleteDataFolderDuplicate(DivinityModData baseMod, IEnumerable<DivinityModData> baseMods)
+	{
+		if (baseMod == null || baseMod.IsEditorMod || baseMod.IsLarianMod || IgnoreMod(baseMod.UUID)) return false;
+		if (String.IsNullOrEmpty(baseMod.FilePath)) return false;
+		return !baseMods.Any(x => x != baseMod && String.Equals(x.FilePath, baseMod.FilePath, SCOMP));
+	}
 
 	public static string MakeSafeFilename(string filename, char replaceChar)
 	{
@@ -828,9 +839,12 @@ public static partial class DivinityModDataLoader
 		return null;
 	}
 
-	public static async Task<ModSettingsParseResults> LoadModSettingsFileAsync(string path)
+	/// <param name="strict">Read only the way LSLib (and the game) reads the file: no entry-by-entry fallback,
+	/// and ReadError is set when LSLib rejects it.</param>
+	public static async Task<ModSettingsParseResults> LoadModSettingsFileAsync(string path, bool strict = false)
 	{
 		var activeMods = new List<DivinityProfileActiveModData>();
+		string readError = null;
 
 		if (File.Exists(path))
 		{
@@ -842,6 +856,20 @@ public static partial class DivinityModDataLoader
 			catch (Exception ex)
 			{
 				DivinityApp.Log($"Error reading '{path}':\n{ex}");
+			}
+
+			if (modSettingsRes == null)
+			{
+				if (strict)
+				{
+					readError = "LSLib could not read the file";
+				}
+				else
+				{
+					// LSLib rejects the whole file when one value doesn't parse (a UUID that isn't a GUID, a Version64 over int64),
+					// which read as an empty order; read the entries one by one instead and skip only the bad ones
+					readError = LoadModSettingsEntriesFromXml(path, activeMods);
+				}
 			}
 
 			if (modSettingsRes != null && modSettingsRes.Regions.ContainsKey("ModuleSettings") && modSettingsRes.Regions.TryGetValue("ModuleSettings", out var region))
@@ -872,7 +900,53 @@ public static partial class DivinityModDataLoader
 		return new ModSettingsParseResults()
 		{
 			ActiveMods = activeMods,
+			ReadError = readError,
 		};
+	}
+
+	/// <summary>Reads the entries of modsettings.lsx one by one, skipping any whose UUID isn't a GUID.</summary>
+	/// <returns>Null, or why the file could not be read at all.</returns>
+	private static string LoadModSettingsEntriesFromXml(string path, List<DivinityProfileActiveModData> activeMods)
+	{
+		try
+		{
+			XDocument xml;
+			using (var fs = File.Open(path, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+			{
+				xml = XDocument.Load(fs);
+			}
+			var entries = xml.Descendants("region").FirstOrDefault(x => x.Attribute("id")?.Value == "ModuleSettings")?
+				.Descendants("node").FirstOrDefault(x => x.Attribute("id")?.Value == "Mods")?
+				.Element("children")?.Elements("node").Where(x => x.Attribute("id")?.Value == "ModuleShortDesc");
+			foreach (var node in entries ?? [])
+			{
+				var uuid = GetAttributeValueWithId(node, "UUID", "");
+				if (!Guid.TryParse(uuid, out var guid))
+				{
+					DivinityApp.Log($"Skipped an entry of '{path}' whose UUID '{uuid}' is not a GUID (Name '{GetAttributeValueWithId(node, "Name", "")}')");
+					continue;
+				}
+				var activeModData = new DivinityProfileActiveModData()
+				{
+					Folder = GetAttributeValueWithId(node, "Folder", ""),
+					MD5 = GetAttributeValueWithId(node, "MD5", ""),
+					Name = GetAttributeValueWithId(node, "Name", ""),
+					// The text LSLib gives a guid attribute when GUIDs aren't byte-swapped, as for this file
+					UUID = guid.ToString(),
+					Version = SafeConvertStringUnsigned(GetAttributeValueWithId(node, "Version", "")),
+				};
+				if (!IgnoreMod(activeModData.UUID))
+				{
+					activeMods.Add(activeModData);
+				}
+			}
+			return null;
+		}
+		catch (Exception ex)
+		{
+			DivinityApp.Log($"Error reading '{path}':\n{ex}");
+			return ex.Message;
+		}
 	}
 
 	public static async Task<List<DivinityProfileData>> LoadProfileDataAsync(string profilePath)
@@ -1102,11 +1176,8 @@ public static partial class DivinityModDataLoader
 
 		string contents = JsonConvert.SerializeObject(order, Newtonsoft.Json.Formatting.Indented);
 
-		var buffer = Encoding.UTF8.GetBytes(contents);
-		using (var fs = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, true))
-		{
-			await fs.WriteAsync(buffer);
-		}
+		// Written next to the file and then swapped in, so a failed write never leaves a half-written order
+		await DivinityFileUtils.WriteFileSafelyAsync(outputFilePath, Encoding.UTF8.GetBytes(contents));
 
 		order.FilePath = outputFilePath;
 
@@ -1346,10 +1417,18 @@ public static partial class DivinityModDataLoader
 				xml.WriteTo(xw);
 
 				var buffer = Encoding.UTF8.GetBytes(sw.ToString());
-				using var fs = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, true);
-				await fs.WriteAsync(buffer);
-
-				return true;
+				// Never swap in a file LSLib (the game's format) can't read back: one mod ID that isn't a GUID, or a version over 2^63,
+				// makes the whole file unreadable. Strict, so the app's own entry-by-entry fallback reader can't hide that.
+				// The previous file is kept as modsettings.lsx.bg3mm.bak (users keep their own .bak).
+				var expected = xml.SelectNodes("//node[@id='ModuleShortDesc']/attribute[@id='UUID']/@value").Cast<XmlNode>().Count(x => !IgnoreMod(x.Value));
+				return await DivinityFileUtils.WriteFileSafelyAsync(outputFilePath, buffer, outputFilePath + ".bg3mm.bak", async tempPath =>
+				{
+					var readResult = await LoadModSettingsFileAsync(tempPath, true);
+					var readBack = readResult.ActiveMods.Count;
+					if (readResult.ReadError != null) DivinityApp.Log($"Not replacing '{outputFilePath}': the new file could not be read back ({readResult.ReadError})");
+					else if (readBack != expected) DivinityApp.Log($"Not replacing '{outputFilePath}': only {readBack} of {expected} mods could be read back from the new file");
+					return readResult.ReadError == null && readBack == expected;
+				});
 			}
 			catch (AccessViolationException ex)
 			{
@@ -1404,25 +1483,12 @@ public static partial class DivinityModDataLoader
 		foreach (var d in dependencies)
 		{
 			var dependencyModData = allMods.FirstOrDefault(x => x.UUID == d.UUID);
-			if (dependencyModData != null)
+			//Mark it as added before recursing, so a mod that depends on itself, or mods that depend on each other, can't recurse forever
+			if (dependencyModData != null && addedMods.Add(dependencyModData.UUID))
 			{
-				var dependencyMods = GetDependencyMods(dependencyModData, allMods, addedMods);
-				if (dependencyMods.Count > 0)
-				{
-					foreach (var m in dependencyMods)
-					{
-						if (!addedMods.Contains(m.UUID))
-						{
-							addedMods.Add(m.UUID);
-							mods.Add(m);
-						}
-					}
-				}
-				if (!addedMods.Contains(dependencyModData.UUID))
-				{
-					mods.Add(dependencyModData);
-					addedMods.Add(dependencyModData.UUID);
-				}
+				//Its own dependencies go before it
+				mods.AddRange(GetDependencyMods(dependencyModData, allMods, addedMods));
+				mods.Add(dependencyModData);
 			}
 		}
 		return mods;
@@ -1439,8 +1505,11 @@ public static partial class DivinityModDataLoader
 			{
 				orderList.AddRange(GetDependencyMods(selectedAdventure, allMods, addedMods));
 			}
-			orderList.Add(selectedAdventure);
-			addedMods.Add(selectedAdventure.UUID);
+			//Already added if one of its dependencies depends on it
+			if (addedMods.Add(selectedAdventure.UUID))
+			{
+				orderList.Add(selectedAdventure);
+			}
 		}
 
 		foreach (var m in order.Where(x => !x.Missing))
@@ -1468,6 +1537,12 @@ public static partial class DivinityModDataLoader
 		return orderList;
 	}
 
+	/// <summary>
+	/// Whether a mod can go into modsettings.lsx. Its UUID attribute is type="guid", and one value that isn't a GUID
+	/// (a meta-less override pak's UUID is its file path) makes LSLib, and so this app, reject the whole file.
+	/// </summary>
+	public static bool CanWriteToModSettings(DivinityModData mod) => mod != null && Guid.TryParse(mod.UUID, out _);
+
 	public static string GenerateModSettingsFile(IEnumerable<DivinityModData> orderList)
 	{
 		/* The "Mods" node is used for the in-game menu it seems. The selected adventure mod is always at the top. */
@@ -1475,11 +1550,18 @@ public static partial class DivinityModDataLoader
 
 		foreach (var mod in orderList)
 		{
-			if (!String.IsNullOrWhiteSpace(mod.UUID))
+			if (CanWriteToModSettings(mod))
 			{
 				string safeName = System.Security.SecurityElement.Escape(mod.Name);
+				string safeFolder = System.Security.SecurityElement.Escape(mod.Folder);
+				// Version64 is an int64 attribute: write the same 64 bits signed, since a value over long.MaxValue would make the whole file unreadable too
+				var version = unchecked((long)mod.Version.VersionInt);
 				// MD5 doesn't seem to actually be used
-				modShortDescText += String.Format(DivinityApp.XML_MODULE_SHORT_DESC, mod.Folder, mod.MD5 ?? "", safeName, mod.UUID, mod.Version.VersionInt, mod.PublishHandle) + Environment.NewLine;
+				modShortDescText += String.Format(DivinityApp.XML_MODULE_SHORT_DESC, safeFolder, System.Security.SecurityElement.Escape(mod.MD5 ?? ""), safeName, mod.UUID, version, mod.PublishHandle) + Environment.NewLine;
+			}
+			else if (!String.IsNullOrWhiteSpace(mod?.UUID))
+			{
+				DivinityApp.Log($"Left '{mod.Name}' out of modsettings.lsx: its UUID '{mod.UUID}' is not a GUID");
 			}
 		}
 

@@ -174,7 +174,8 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 
 	private void UpdateWindowSettings()
 	{
-		if (ViewModel?.Settings?.Loaded == true)
+		//A minimized window sits at -32000,-32000, so keep the last normal or maximized placement instead
+		if (ViewModel?.Settings?.Loaded == true && WindowState != WindowState.Minimized)
 		{
 			var win = ViewModel.Settings.Window;
 			win.Maximized = WindowState == WindowState.Maximized;
@@ -184,7 +185,12 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 			win.Width = Width;
 			win.Height = Height;
 
-			win.Screen = Screen.AllScreens.IndexOf(Screen.FromHandle(_hwnd.Handle));
+			//In the Closed handler the window is already destroyed, and FromHandle(0) gives the primary screen,
+			//so keep the screen recorded while the window was open
+			if (_hwnd.Handle != IntPtr.Zero)
+			{
+				win.Screen = Screen.AllScreens.IndexOf(Screen.FromHandle(_hwnd.Handle));
+			}
 		}
 	}
 
@@ -228,8 +234,14 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 
 			if (width <= 0) win.Width = width = 1600;
 			if (height <= 0) win.Height = height = 800;
-			if (winX < 0) winX = Left;
-			if (winY < 0) winY = Top;
+			//Negative coordinates are valid on a monitor left of or above the primary one, so only fall back to the
+			//default position when the saved title bar is on no connected screen (e.g. that monitor was unplugged)
+			var titleBar = new Rect(winX, winY, width, SystemParameters.CaptionHeight);
+			if (!Screen.AllScreens.Any(x => x.WpfWorkingArea.IntersectsWith(titleBar)))
+			{
+				winX = Left;
+				winY = Top;
+			}
 
 			Width = width;
 			Height = height;

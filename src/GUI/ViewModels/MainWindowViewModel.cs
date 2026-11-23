@@ -339,8 +339,9 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 		MainProgressIsActive = true;
 
 		string dllDestination = Path.Combine(exeDir, DivinityApp.EXTENDER_UPDATER_FILE);
+		var progressDone = false;
 
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+		RunInBackground(async (ctrl, t) =>
 		{
 			int successes = 0;
 			Stream webStream = null;
@@ -384,6 +385,7 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 
 			await Observable.Start(() =>
 			{
+				progressDone = true;
 				OnMainProgressComplete();
 				if (successes >= 3)
 				{
@@ -407,6 +409,10 @@ public class MainWindowViewModel : BaseHistoryViewModel, IActivatableViewModel, 
 			if (!isLoggingEnabled) await Observable.Start(() => Window.ToggleLogging(false), RxApp.MainThreadScheduler);
 
 			return Disposable.Empty;
+		}, () =>
+		{
+			//The overlay may belong to another job by now
+			if (!progressDone) OnMainProgressComplete();
 		});
 	}
 
@@ -749,7 +755,7 @@ Directory the zip will be extracted to:
 	public void LoadExtenderSettingsBackground()
 	{
 		DivinityApp.Log($"Loading extender settings.");
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (c, t) =>
+		RunInBackground(async (c, t) =>
 		{
 			await CheckForLatestExtenderUpdaterRelease(t);
 			await LoadExtenderSettingsAsync(t);
@@ -900,7 +906,7 @@ Directory the zip will be extracted to:
 
 			if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
 			{
-				RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, t) =>
+				RunInBackground(async (sch, t) =>
 				{
 					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(GetLarianStudiosAppDataFolder(), !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
 				});
@@ -1127,6 +1133,9 @@ Directory the zip will be extracted to:
 					Settings.SetFrom<DivinityModManagerSettings, ReactiveAttribute>(settings);
 					Settings.ExtenderSettings.SetFrom(settings.ExtenderSettings);
 					Settings.ExtenderUpdaterSettings.SetFrom(settings.ExtenderUpdaterSettings);
+					//Window and Confirmations have no [Reactive], so the SetFrom above skips them
+					Settings.Window.SetFrom(settings.Window);
+					Settings.Confirmations.SetFrom(settings.Confirmations);
 				}
 			}
 		}
@@ -1697,7 +1706,14 @@ Directory the zip will be extracted to:
 			{
 				if (baseModsDict.TryGetValue(pakMod.UUID, out var baseMod) && !baseMod.IsEditorMod)
 				{
-					modLoadingResults.Duplicates.Add(baseMod);
+					if (DivinityModDataLoader.CanDeleteDataFolderDuplicate(baseMod, baseMods))
+					{
+						modLoadingResults.Duplicates.Add(baseMod);
+					}
+					else
+					{
+						DivinityApp.Log($"Mod pak '{pakMod.FilePath}' has the UUID of {baseMod.Name} [{baseMod.UUID}] from '{baseMod.FilePath}', a game module or a pak holding several modules, so that file is not offered for deletion.");
+					}
 				}
 			}
 			var dupeCount = modLoadingResults.Duplicates.Count;
@@ -1742,7 +1758,8 @@ Directory the zip will be extracted to:
 		{
 			DivinityApp.Log($"Profile folder not found at '{PathwayData.AppDataProfilesPath}'.");
 		}
-		return null;
+		// Not null: RefreshAsync adds these to Profiles, and AddRange(null) throws (no profiles falls back to the default order)
+		return [];
 	}
 
 	private static readonly DivinityLoadOrder _fallbackOrder = new DivinityLoadOrder()
@@ -1891,7 +1908,7 @@ Directory the zip will be extracted to:
 				TotalFiles = files.Count()
 			};
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				var builtinMods = DivinityApp.IgnoredMods.Items.SafeToDictionary(x => x.Folder, x => x);
 				MainProgressToken = new CancellationTokenSource();
@@ -1962,6 +1979,10 @@ Directory the zip will be extracted to:
 					}
 				});
 				return Disposable.Empty;
+			}, () =>
+			{
+				IsRefreshing = false;
+				OnMainProgressComplete();
 			});
 		}
 	}
@@ -2090,6 +2111,9 @@ Directory the zip will be extracted to:
 		}
 	}
 
+	/// <summary>The order the active list was last loaded from (or found to match), so a selection that only moves to a new index is not reloaded.</summary>
+	private DivinityLoadOrder _loadedModOrder;
+
 	public bool LoadModOrder(DivinityLoadOrder order)
 	{
 		if (order == null) return false;
@@ -2116,6 +2140,7 @@ Directory the zip will be extracted to:
 			if (!DivinityModDataLoader.IgnoreMod(entry.UUID))
 			{
 				var modResult = mods.Lookup(entry.UUID);
+				entry.Missing = !modResult.HasValue;
 				if (modResult.HasValue)
 				{
 					var mod = modResult.Value;
@@ -2152,6 +2177,7 @@ Directory the zip will be extracted to:
 		}
 
 		OrderJustLoaded = true;
+		_loadedModOrder = order;
 
 		IsLoadingOrder = false;
 		return true;
@@ -2262,7 +2288,7 @@ Directory the zip will be extracted to:
 	private void RefreshAllModUpdatesBackground()
 	{
 		IsRefreshingModUpdates = true;
-		var disposable = RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, cts) =>
+		var disposable = RunInBackground(async (sch, cts) =>
 		{
 			UpdateHandler.Workshop.SteamAppID = AppSettings.DefaultPathways.Steam.AppID;
 
@@ -2277,7 +2303,7 @@ Directory the zip will be extracted to:
 			await UpdateHandler.SaveAsync(UserMods, Version.ToString(), cts);
 
 			IsRefreshingModUpdates = false;
-		});
+		}, () => IsRefreshingModUpdates = false);
 	}
 
 	private async Task CheckForEmptyOrderAsync(IScheduler sch, CancellationToken token)
@@ -2288,14 +2314,17 @@ Directory the zip will be extracted to:
 
 		if (modSettingsData.CountActive() <= 0)
 		{
-			var modSettingsOrder = SavedModOrderList.FirstOrDefault();
 			var lastExported = SavedModOrderList.FirstOrDefault(x => x.Name == DivinityApp.PATH_LAST_EXPORTED_NAME);
-			if (modSettingsOrder != null && lastExported != null && lastExported.Order.Count > 0)
+			if (lastExported != null && lastExported.Order.Count > 0)
 			{
+				// An unreadable file (cut off, not valid XML, locked) reads as empty too; say so instead of "reset externally"
+				var question = modSettingsData.ReadError != null
+					? $"The game's mod list ('{modSettingsPath.ReplaceSpecialPaths()}') could not be read: {modSettingsData.ReadError}\nUse the last exported mod order?"
+					: "It looks like the load order was reset externally. Use the last exported mod order?";
 				var doReset = await Observable.Start(() =>
 				{
 					MessageBoxResult result = Xceed.Wpf.Toolkit.MessageBox.Show(Window,
-					"It looks like the load order was reset externally. Use the last exported mod order?",
+					question,
 					"Restore Load Order",
 					MessageBoxButton.YesNo,
 					MessageBoxImage.Warning,
@@ -2310,25 +2339,29 @@ Directory the zip will be extracted to:
 
 				if (doReset)
 				{
-					modSettingsOrder.SetOrder(lastExported);
-					SelectedModOrder.SetOrder(lastExported);
-
-					List<string> orderList = [];
-					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(SelectedModOrder.Order.Select(x => x.UUID));
+					// Restore into the profile (Current) only. Writing into a saved order emptied LastExported when it was the
+					// first saved order (SetOrder on itself), and otherwise overwrote that first order.
+					var outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
+					var finalOrder = DivinityModDataLoader.BuildOutputList(lastExported.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, SelectedAdventureMod);
+					// The profile mirrors what is written to modsettings.lsx: BuildOutputList leaves out mods that aren't installed and
+					// GenerateModSettingsFile those whose ID isn't a GUID (an older LastExported can hold both)
+					var orderList = finalOrder.Where(DivinityModDataLoader.CanWriteToModSettings).Select(x => x.UUID).ToList();
 
 					await Observable.Start(() =>
 					{
+						SelectedProfile.ActiveMods.Clear();
 						SelectedProfile.ActiveMods.AddRange(orderList.Select(ProfileActiveModDataFromUUID));
 					}, RxApp.MainThreadScheduler);
 
-					var outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
-					var finalOrder = DivinityModDataLoader.BuildOutputList(lastExported.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, SelectedAdventureMod);
-					await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder);
+					if (!await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder))
+					{
+						ShowAlert($"Could not write the restored load order to '{outputPath}', so the game does not have it yet. Use Export Order to Game to try again.", AlertType.Danger);
+					}
 
 					await Observable.Start(() =>
 					{
-						BuildModOrderList(SelectedModOrderIndex);
+						// Index 0 is Current, rebuilt from the profile's restored mods
+						BuildModOrderList(0);
 					}, RxApp.MainThreadScheduler);
 				}
 			}
@@ -2550,7 +2583,8 @@ Directory the zip will be extracted to:
 		}, RxApp.MainThreadScheduler);
 		if (ActiveMods.Count == 0)
 		{
-			RxApp.TaskpoolScheduler.ScheduleAsync(CheckForEmptyOrderAsync);
+			// BuildModOrderList sets IsLoadingOrder; a throw before it clears the flag would leave the window locked
+			RunInBackground(CheckForEmptyOrderAsync, () => IsLoadingOrder = false);
 		}
 		return Unit.Default;
 	}
@@ -2591,7 +2625,7 @@ Directory the zip will be extracted to:
 
 	private void SaveLoadOrder(bool skipSaveConfirmation = false)
 	{
-		RxApp.MainThreadScheduler.ScheduleAsync(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation));
+		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (sch, cts) => await SaveLoadOrderAsync(skipSaveConfirmation), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
 	private async Task<bool> SaveLoadOrderAsync(bool skipSaveConfirmation = false)
@@ -2619,11 +2653,13 @@ Directory the zip will be extracted to:
 				outputPath = SelectedModOrder.FilePath;
 			}
 
+			var exportedToGame = false;
 			try
 			{
 				if (SelectedModOrder.IsModSettings)
 				{
 					//When saving the "Current" order, write this to modsettings.lsx instead of a json file.
+					exportedToGame = true;
 					result = await ExportLoadOrderAsync();
 					outputPath = Path.Join(SelectedProfile.Folder, "modsettings.lsx");
 					_modSettingsWatcher.PauseWatcher(true, 1000);
@@ -2639,7 +2675,8 @@ Directory the zip will be extracted to:
 				result = false;
 			}
 
-			if (result && !skipSaveConfirmation)
+			// The export already reported its outcome (success, or which mods it left out); a Success alert here would replace it
+			if (result && !skipSaveConfirmation && !exportedToGame)
 			{
 				ShowAlert($"Saved mod load order to '{outputPath}'", AlertType.Success, 10);
 			}
@@ -2840,20 +2877,26 @@ Directory the zip will be extracted to:
 
 	private void ExportLoadOrder()
 	{
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
-		{
-			await ExportLoadOrderAsync();
-			return Disposable.Empty;
-		});
+		// The UI thread, like SaveLoadOrder: the export updates the bound order list and the profile's mods
+		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (ctrl, t) => await ExportLoadOrderAsync(), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
-	private async Task BackupCurrentLoadOrderAsync()
+	/// <summary>
+	/// Whether an export writes this entry to modsettings.lsx: only installed mods whose ID is a GUID
+	/// (BuildOutputList skips the rest, GenerateModSettingsFile leaves out the others, see CanWriteToModSettings).
+	/// </summary>
+	private static bool IsWrittenOnExport(DivinityLoadOrderEntry entry) => !entry.Missing && Guid.TryParse(entry.UUID, out _);
+
+	/// <param name="exportedOrder">The order that was exported.</param>
+	/// <param name="writtenEntries">Its entries that were written to modsettings.lsx (IsWrittenOnExport), taken before the write.</param>
+	private async Task BackupCurrentLoadOrderAsync(DivinityLoadOrder exportedOrder, List<DivinityLoadOrderEntry> writtenEntries)
 	{
 		var backupOrderPath = Path.Combine(GetOrdersDirectory(), DivinityApp.PATH_LAST_EXPORTED_NAME + ".json");
 		try
 		{
 			var backupOrder = new DivinityLoadOrder { Name = DivinityApp.PATH_LAST_EXPORTED_NAME, FilePath = backupOrderPath };
-			backupOrder.SetOrder(SelectedModOrder);
+			//Back up what was written to the game
+			backupOrder.SetOrder(writtenEntries);
 
 			await DivinityModDataLoader.ExportLoadOrderToFileAsync(backupOrderPath, backupOrder);
 			var updatedOrder = false;
@@ -2861,11 +2904,21 @@ Directory the zip will be extracted to:
 			{
 				if (order.FilePath == backupOrderPath)
 				{
-					order.SetOrder(backupOrder);
+					// When LastExported itself was exported, only its file changes: the order on screen keeps its missing
+					// and non-GUID entries, so the list stays as the user left it and the missing-mods notice still lists them
+					if (!ReferenceEquals(order, exportedOrder)) order.SetOrder(backupOrder);
 					updatedOrder = true;
 				}
 			}
-			if (!updatedOrder) AddNewModOrder(backupOrder);
+			if (!updatedOrder)
+			{
+				// Not AddNewModOrder: it rebuilds the order list and selects another order, which the export then copies into Current.
+				// Index 1 is where BuildModOrderList puts LastExported; the selected order stays selected.
+				var selectedOrder = SelectedModOrder;
+				SavedModOrderList.Add(backupOrder);
+				ModOrderList.Insert(Math.Min(1, ModOrderList.Count), backupOrder);
+				SelectedModOrderIndex = ModOrderList.IndexOf(selectedOrder);
+			}
 		}
 		catch (Exception ex)
 		{
@@ -2901,7 +2954,18 @@ Directory the zip will be extracted to:
 			UpdateOrderFromActiveMods();
 			DeleteModCrashSanityCheck();
 
-			var outputAdventureMod = SelectedAdventureMod;
+			// One snapshot of what is exported: the window stays usable during the awaits below, so the selected order,
+			// its entries or the profile can change before the write finishes; everything after it uses only this snapshot
+			var exportOrder = SelectedModOrder;
+			var exportProfile = SelectedProfile;
+			var exportAdventureMod = SelectedAdventureMod;
+			// A profile switch during the awaits replaces the Current order: mirror into this profile's one only
+			var exportCurrent = ModOrderList.FirstOrDefault(x => x.IsModSettings);
+			var orderSnapshot = exportOrder.Clone();
+			var writtenEntries = orderSnapshot.Order.Where(IsWrittenOnExport).ToList();
+			var hasInstalledEntries = orderSnapshot.Order.Any(x => !x.Missing);
+
+			var outputAdventureMod = exportAdventureMod;
 			if (outputAdventureMod == null)
 			{
 				var gustavX = mods.Lookup(DivinityApp.GUSTAVX_UUID);
@@ -2927,53 +2991,72 @@ Directory the zip will be extracted to:
 					}
 				}
 			}
-			string outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
-			var finalOrder = DivinityModDataLoader.BuildOutputList(SelectedModOrder.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, outputAdventureMod);
-			var result = await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder);
+			string outputPath = Path.Combine(exportProfile.Folder, "modsettings.lsx");
+			var finalOrder = DivinityModDataLoader.BuildOutputList(orderSnapshot.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, outputAdventureMod);
+			var result = await DivinityModDataLoader.ExportModSettingsToFileAsync(exportProfile.Folder, finalOrder);
 
-			await BackupCurrentLoadOrderAsync();
+			// Only a successful export replaces the LastExported backup
+			if (result) await BackupCurrentLoadOrderAsync(exportOrder, writtenEntries);
 
 			var dir = GetLarianStudiosAppDataFolder();
-			if (SelectedModOrder.Order.Count > 0)
+			try
 			{
-				await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, false, false, true);
-			}
-			else
-			{
-				if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
+				if (hasInstalledEntries)
 				{
-					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
+					await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, false, false, true);
 				}
+				else
+				{
+					if (Settings.DisableLauncherTelemetry || Settings.DisableLauncherModWarnings)
+					{
+						await DivinityModDataLoader.UpdateLauncherPreferencesAsync(dir, !Settings.DisableLauncherTelemetry, !Settings.DisableLauncherModWarnings);
+					}
+				}
+			}
+			catch (Exception ex)
+			{
+				// Secondary to the export (for example a read-only preferences.json): modsettings.lsx is already written,
+				// so this must not turn the export into a failure or skip updating Current and the profile below
+				DivinityApp.Log($"Error updating the launcher preferences in '{dir}':\n{ex}");
 			}
 
 			if (result)
 			{
 				await Observable.Start(() =>
 				{
-					ShowAlert($"Exported load order to '{outputPath}'", AlertType.Success, 15);
-
-					if (DivinityModDataLoader.ExportedSelectedProfile(PathwayData.AppDataProfilesPath, SelectedProfile.UUID))
+					// GenerateModSettingsFile leaves these out: one ID that isn't a GUID would make the whole file unreadable
+					var skippedMods = finalOrder.Where(x => !String.IsNullOrWhiteSpace(x.UUID) && !DivinityModDataLoader.CanWriteToModSettings(x)).Select(x => x.Name).ToList();
+					if (skippedMods.Count > 0)
 					{
-						DivinityApp.Log($"Set active profile to '{SelectedProfile.Name}'");
+						ShowAlert($"Exported load order to '{outputPath}', but left out {String.Join(", ", skippedMods)}: a mod ID that is not a valid UUID would make the game's mod list unreadable", AlertType.Warning);
 					}
 					else
 					{
-						DivinityApp.Log($"Could not set active profile to '{SelectedProfile.Name}'");
+						ShowAlert($"Exported load order to '{outputPath}'", AlertType.Success, 15);
 					}
 
-					//Update "Current" order
-					if (!SelectedModOrder.IsModSettings)
+					if (DivinityModDataLoader.ExportedSelectedProfile(PathwayData.AppDataProfilesPath, exportProfile.UUID))
 					{
-						this.ModOrderList.First(x => x.IsModSettings)?.SetOrder(SelectedModOrder.Order);
+						DivinityApp.Log($"Set active profile to '{exportProfile.Name}'");
+					}
+					else
+					{
+						DivinityApp.Log($"Could not set active profile to '{exportProfile.Name}'");
+					}
+
+					//Update "Current" order to mirror what was written
+					if (!exportOrder.IsModSettings)
+					{
+						exportCurrent?.SetOrder(writtenEntries);
 					}
 
 					List<string> orderList = [];
-					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(SelectedModOrder.Order.Select(x => x.UUID));
+					if (exportAdventureMod != null) orderList.Add(exportAdventureMod.UUID);
+					orderList.AddRange(writtenEntries.Select(x => x.UUID));
 
-					SelectedProfile.ActiveMods.Clear();
-					SelectedProfile.ActiveMods.AddRange(orderList.Select(x => ProfileActiveModDataFromUUID(x)));
-					DisplayMissingMods(SelectedModOrder);
+					exportProfile.ActiveMods.Clear();
+					exportProfile.ActiveMods.AddRange(orderList.Select(x => ProfileActiveModDataFromUUID(x)));
+					DisplayMissingMods(orderSnapshot);
 
 					HasExported = true;
 
@@ -2985,7 +3068,7 @@ Directory the zip will be extracted to:
 			{
 				await Observable.Start(() =>
 				{
-					string msg = $"Problem exporting load order to '{outputPath}'. Is the file locked?";
+					string msg = $"Problem exporting load order to '{outputPath}'. The file was left unchanged. Is it locked or read-only? Export also stops if the new file could not be read back the way the game reads it.";
 					ShowAlert(msg, AlertType.Danger);
 					View.MainWindowMessageBox_OK.WindowBackground = MainViewControl.MessageBoxErrorBackgroundBrush;
 					View.MainWindowMessageBox_OK.Closed += MainWindowMessageBox_Closed_ResetColor;
@@ -3034,6 +3117,37 @@ Directory the zip will be extracted to:
 		}
 	}
 
+	/// <summary>
+	/// Runs work on the task pool. A failure is logged and shown (RxApp.TaskpoolScheduler.ScheduleAsync alone drops it), then
+	/// onError runs on the UI thread so the caller can clear the busy state it set, instead of leaving the app locked.
+	/// </summary>
+	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task> work, Action onError = null, TimeSpan? dueTime = null)
+	{
+		return RxApp.TaskpoolScheduler.ScheduleAsyncSafe(work, ex => ReportBackgroundError(ex, onError), dueTime);
+	}
+
+	/// <summary>
+	/// Logs and shows an error from background work, then runs the job's cleanup (if any) on the UI thread.
+	/// </summary>
+	private void ReportBackgroundError(Exception ex, Action onError = null)
+	{
+		DivinityApp.Log($"Error in background work:\n{ex}");
+		ShowAlert($"Error: {ex.Message}", AlertType.Danger);
+		if (onError != null) RxApp.MainThreadScheduler.Schedule(onError);
+	}
+
+	private IDisposable RunInBackground(Func<IScheduler, CancellationToken, Task<IDisposable>> work, Action onError = null, TimeSpan? dueTime = null)
+	{
+		return RunInBackground(async (sch, token) => { await work(sch, token); }, onError, dueTime);
+	}
+
+	private void ResetBusyState()
+	{
+		IsRefreshing = false;
+		IsLoadingOrder = false;
+		OnMainProgressComplete();
+	}
+
 	private static readonly ArchiveEncoding _archiveEncoding = new(Encoding.UTF8, Encoding.UTF8);
 	private static readonly ReaderOptions _importReaderOptions = new() { ArchiveEncoding = _archiveEncoding };
 	private static readonly WriterOptions _exportWriterOptions = new(CompressionType.Deflate) { ArchiveEncoding = _archiveEncoding };
@@ -3075,7 +3189,7 @@ Directory the zip will be extracted to:
 			{
 				TotalFiles = 1
 			};
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				var builtinMods = DivinityApp.IgnoredMods.Items.SafeToDictionary(x => x.Folder, x => x);
 				MainProgressToken = new CancellationTokenSource();
@@ -3153,7 +3267,7 @@ Directory the zip will be extracted to:
 					}
 				});
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -3295,9 +3409,18 @@ Directory the zip will be extracted to:
 
 								if (!outputName.Contains(mod.Name))
 								{
-									var nameFromMeta = $"{mod.Folder}.pak";
-									outputFilePath = Path.Combine(outputDirectory, nameFromMeta);
-									mod.FilePath = outputFilePath;
+									// Folder comes from the mod's own meta.lsx: use it only as a plain file name inside the Mods folder
+									var nameFromMeta = DivinityModDataLoader.MakeSafeFilename($"{mod.Folder}.pak", '_');
+									var metaOutputPath = DivinityFileUtils.GetContainedPath(outputDirectory, nameFromMeta);
+									if (!String.IsNullOrWhiteSpace(mod.Folder) && metaOutputPath != null)
+									{
+										outputFilePath = metaOutputPath;
+										mod.FilePath = outputFilePath;
+									}
+									else
+									{
+										DivinityApp.Log($"{(String.IsNullOrWhiteSpace(mod.Folder) ? "No Folder" : $"Unsafe Folder '{mod.Folder}'")} in '{filePath}', keeping the name '{outputName}'");
+									}
 								}
 								using (var fs = File.Create(outputFilePath, 4096, System.IO.FileOptions.Asynchronous))
 								{
@@ -3422,7 +3545,15 @@ Directory the zip will be extracted to:
 							if (file.Key.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
 							{
 								var outputName = Path.GetFileName(file.Key);
-								var outputFilePath = Path.Combine(outputDirectory, outputName);
+								// Entry names come from whoever made the archive: "x/D:evil.pak" gives the drive-relative "D:evil.pak",
+								// which Path.Combine would put outside the Mods folder
+								var outputFilePath = DivinityFileUtils.GetContainedPath(outputDirectory, DivinityModDataLoader.MakeSafeFilename(outputName, '_'));
+								if (outputFilePath == null)
+								{
+									taskResult.AddError(file.Key, new InvalidDataException($"'{file.Key}' would be written outside '{outputDirectory}'"));
+									DivinityApp.Log($"Skipped '{file.Key}' in '{archivePath}': it would be written outside '{outputDirectory}'");
+									continue;
+								}
 								taskResult.TotalPaks++;
 								using (var entryStream = file.OpenEntryStream())
 								{
@@ -3535,14 +3666,14 @@ Directory the zip will be extracted to:
 			MainProgressWorkText = "";
 			MainProgressValue = 0d;
 			MainProgressIsActive = true;
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				MainProgressToken = new CancellationTokenSource();
 				await ExportLoadOrderToArchiveAsync("", MainProgressToken.Token);
 				await ctrl.Yield();
 				RxApp.MainThreadScheduler.Schedule(_ => OnMainProgressComplete());
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -3555,7 +3686,6 @@ Directory the zip will be extracted to:
 			var gameDataFolder = Path.GetFullPath(Settings.GameDataPath);
 			var appDir = DivinityApp.GetAppDirectory();
 			var tempDir = Path.Combine(appDir, "_Temp_" + DateTime.Now.ToString(sysFormat + "_HH-mm-ss"));
-			Directory.CreateDirectory(tempDir);
 
 			if (String.IsNullOrEmpty(outputPath))
 			{
@@ -3574,6 +3704,7 @@ Directory the zip will be extracted to:
 
 			var incrementProgress = 1d / modPaks.Count;
 
+			Directory.CreateDirectory(tempDir);
 			try
 			{
 				using (var stream = File.OpenWrite(outputPath))
@@ -3600,11 +3731,12 @@ Directory the zip will be extracted to:
 						}
 						else
 						{
-							var outputPackage = Path.ChangeExtension(Path.Combine(tempDir, mod.Folder), "pak");
+							// Folder and UUID come from the mod's own meta.lsx: keep the temporary pak a plain file name inside tempDir
+							var outputPackage = Path.ChangeExtension(Path.Combine(tempDir, DivinityModDataLoader.MakeSafeFilename(mod.Folder, '_')), "pak");
 							//Imported Classic Projects
 							if (!mod.Folder.Contains(mod.UUID))
 							{
-								outputPackage = Path.ChangeExtension(Path.Combine(tempDir, mod.Folder + "_" + mod.UUID), "pak");
+								outputPackage = Path.ChangeExtension(Path.Combine(tempDir, DivinityModDataLoader.MakeSafeFilename(mod.Folder + "_" + mod.UUID, '_')), "pak");
 							}
 
 							var sourceFolders = new List<string>();
@@ -3646,8 +3778,18 @@ Directory the zip will be extracted to:
 					ShowAlert(msg, AlertType.Danger);
 				});
 			}
-
-			Directory.Delete(tempDir);
+			finally
+			{
+				// Also after a cancel (the return above) or a failed or cancelled pak write, which leaves its temporary pak in tempDir
+				try
+				{
+					Directory.Delete(tempDir, true);
+				}
+				catch (Exception ex)
+				{
+					DivinityApp.Log($"Error deleting the temporary folder '{tempDir}':\n{ex}");
+				}
+			}
 		}
 		else
 		{
@@ -3729,14 +3871,14 @@ Directory the zip will be extracted to:
 				MainProgressValue = 0d;
 				MainProgressIsActive = true;
 
-				RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+				RunInBackground(async (ctrl, t) =>
 				{
 					MainProgressToken = new CancellationTokenSource();
 					await ExportLoadOrderToArchiveAsync(dialog.FileName, MainProgressToken.Token);
 					await ctrl.Yield();
 					RxApp.MainThreadScheduler.Schedule(_ => OnMainProgressComplete());
 					return Disposable.Empty;
-				});
+				}, () => OnMainProgressComplete());
 			}
 		}
 		else
@@ -4142,7 +4284,7 @@ Directory the zip will be extracted to:
 		Window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
 		Window.TaskbarItemInfo.ProgressValue = 0;
 		IsRefreshing = true;
-		RxApp.TaskpoolScheduler.ScheduleAsync(async (sch, token) =>
+		RunInBackground(async (sch, token) =>
 		{
 			await RefreshAsync(sch, token);
 			if(ProcessHelper.IsCurrentProcessAdmin())
@@ -4163,7 +4305,7 @@ Directory the zip will be extracted to:
 					});
 				}
 			}
-		});
+		}, ResetBusyState);
 	}
 
 	public bool AutoChangedOrder { get; set; }
@@ -4422,12 +4564,17 @@ Directory the zip will be extracted to:
 
 			var openOutputPath = dialog.SelectedPath;
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				int successes = 0;
+				// Paks with entries whose paths point outside their folder: those entries are skipped, the rest is extracted
+				var unsafePaks = new List<string>();
+				// Paks whose only problem was those skipped entries (no error while extracting the rest)
+				int skippedOnly = 0;
 				foreach (var path in SelectedPakMods.Select(x => x.FilePath))
 				{
 					if (MainProgressToken.IsCancellationRequested) break;
+					var skipped = new List<string>();
 					try
 					{
 						//Put each pak into its own folder
@@ -4440,7 +4587,9 @@ Directory the zip will be extracted to:
 						{
 							destination = outputDirectory;
 						}
-						var success = await DivinityFileUtils.ExtractPackageAsync(path, destination, MainProgressToken.Token);
+						// With a skipped list, an error while extracting throws, so reaching the next line means no error happened
+						var success = await DivinityFileUtils.ExtractPackageAsync(path, destination, MainProgressToken.Token, null, skipped);
+						if (!success && skipped.Count > 0) skippedOnly += 1;
 						if (success)
 						{
 							successes += 1;
@@ -4453,6 +4602,12 @@ Directory the zip will be extracted to:
 					catch (Exception ex)
 					{
 						DivinityApp.Log($"Error extracting package: {ex}");
+					}
+					if (skipped.Count > 0)
+					{
+						// Name the skipped entries here: logging is off by default, so the log is no place to send the user
+						var names = String.Join(", ", skipped.Take(3)) + (skipped.Count > 3 ? $" and {skipped.Count - 3} more" : "");
+						unsafePaks.Add($"{Path.GetFileName(path)} ({names})");
 					}
 					IncreaseMainProgressValue(taskStepAmount);
 				}
@@ -4469,12 +4624,21 @@ Directory the zip will be extracted to:
 					}
 					else
 					{
-						ShowAlert($"Error occurred when extracting selected mods to '{dialog.SelectedPath}'", AlertType.Danger, 30);
+						var skippedText = unsafePaks.Count > 0 ? $"skipped files for safety in {String.Join(", ", unsafePaks)}: their paths point outside the folder they were extracted to" : "";
+						if (skippedOnly > 0 && successes + skippedOnly >= totalWork)
+						{
+							// The only problem was the skipped entries; everything else was extracted
+							ShowAlert($"Extracted selected mods to '{dialog.SelectedPath}', but {skippedText}", AlertType.Warning, 0);
+						}
+						else
+						{
+							ShowAlert($"Error occurred when extracting selected mods to '{dialog.SelectedPath}'{(skippedText != "" ? $". Also {skippedText}" : "")}", AlertType.Danger, 30);
+						}
 					}
 				});
 
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -4530,7 +4694,7 @@ Directory the zip will be extracted to:
 
 			var openOutputPath = dialog.SelectedPath;
 
-			RxApp.TaskpoolScheduler.ScheduleAsync(async (ctrl, t) =>
+			RunInBackground(async (ctrl, t) =>
 			{
 				if (MainProgressToken.IsCancellationRequested) return Disposable.Empty;
 				var path = SelectedAdventureMod.FilePath;
@@ -4570,7 +4734,7 @@ Directory the zip will be extracted to:
 				});
 
 				return Disposable.Empty;
-			});
+			}, () => OnMainProgressComplete());
 		}
 	}
 
@@ -4883,8 +5047,7 @@ Directory the zip will be extracted to:
 
 		if (SelectedModOrder != null)
 		{
-			SelectedModOrder.Order.Clear();
-			SelectedModOrder.AddRange(ActiveMods, true);
+			SelectedModOrder.UpdateFrom(ActiveMods, uuid => mods.Lookup(uuid).HasValue);
 		}
 	}
 
@@ -4987,7 +5150,7 @@ Directory the zip will be extracted to:
 			Window.TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.Normal;
 			Window.TaskbarItemInfo.ProgressValue = 0;
 			IsRefreshing = true;
-			RxApp.TaskpoolScheduler.ScheduleAsync(RefreshAsync);
+			RunInBackground(RefreshAsync, ResetBusyState);
 		}, canRefreshObservable, RxApp.MainThreadScheduler);
 
 		Keys.Refresh.AddAction(() => RefreshCommand.Execute(Unit.Default).Subscribe(), canRefreshObservable);
@@ -5200,7 +5363,14 @@ Directory the zip will be extracted to:
 			{
 				if (SelectedModOrder != null && !IsLoadingOrder)
 				{
-					if (!SelectedModOrder.OrderEquals(ActiveMods.Select(x => x.UUID)))
+					if (ReferenceEquals(SelectedModOrder, _loadedModOrder))
+					{
+						// The same order at a new index, because an order was inserted or removed before it (the first export adds
+						// LastExported at index 1). The active list already shows it; reloading would drop the selection and,
+						// since an order keeps its missing entries, OrderEquals below would never match it.
+						DivinityApp.Log($"Order {SelectedModOrder.Name} moved to index {SelectedModOrderIndex}. Skipping list loading since it is already loaded.");
+					}
+					else if (!SelectedModOrder.OrderEquals(ActiveMods.Select(x => x.UUID)))
 					{
 						if (LoadModOrder(SelectedModOrder))
 						{
@@ -5214,6 +5384,7 @@ Directory the zip will be extracted to:
 					else
 					{
 						DivinityApp.Log($"Order changed to {SelectedModOrder.Name}. Skipping list loading since the orders match.");
+						_loadedModOrder = SelectedModOrder;
 					}
 				}
 			}
@@ -5424,11 +5595,15 @@ Directory the zip will be extracted to:
 				//var exeName = !Settings.LaunchDX11 ? "bg3" : "bg3_dx11";
 				//var isGameRunning = Process.GetProcessesByName(exeName).Length > 0;
 				checkModSettingsTask?.Dispose();
-				checkModSettingsTask = RxApp.TaskpoolScheduler.ScheduleAsync(TimeSpan.FromSeconds(2), async (sch, cts) =>
+				checkModSettingsTask = RunInBackground(async (sch, cts) =>
 				{
 					var activeCount = ActiveMods.Count;
 					var modSettingsData = await DivinityModDataLoader.LoadModSettingsFileAsync(e.FullPath);
-					if (activeCount > 0 && modSettingsData.CountActive() <= 0)
+					if (modSettingsData.ReadError != null)
+					{
+						ShowAlert($"The active load order (modsettings.lsx) could not be read: {modSettingsData.ReadError}", AlertType.Danger);
+					}
+					else if (activeCount > 0 && modSettingsData.CountActive() <= 0)
 					{
 						ShowAlert("The active load order (modsettings.lsx) has been reset externally", AlertType.Danger);
 						RxApp.MainThreadScheduler.Schedule(() =>
@@ -5442,7 +5617,7 @@ Directory the zip will be extracted to:
 						});
 					}
 					HasExported = false;
-				});
+				}, dueTime: TimeSpan.FromSeconds(2));
 			}
 		});
 	}
