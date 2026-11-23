@@ -30,4 +30,15 @@ public class WindowSettings
 		Height = -1;
 		Screen = 0;
 	}
+
+	public void SetFrom(WindowSettings from)
+	{
+		if (from == null) return;
+		Maximized = from.Maximized;
+		Screen = from.Screen;
+		X = from.X;
+		Y = from.Y;
+		Width = from.Width;
+		Height = from.Height;
+	}
 }
