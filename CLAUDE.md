@@ -4,14 +4,21 @@ Context for AI agents working in this repo. Facts here were verified against the
 commit `fc35358` (2026-09-18/23); §2.1 and §2.2 also cover `fix/publish-prebuild-quoting`. Re-audited against `fc35358`
 by a cloud review on 2026-11-03 (branch `kk/laughing-pascal-710otn`, under `docs/review/`) and re-checked locally on 2026-11-23. Where something is inferred rather than observed, it says so.
 
-> **The fork's roadmap lives in `implementation-plan.html`; start at its "Resume here" box.** Keep it current on any status
-> change. (`plan-overview.html` retired 2026-11-06: don't update it.) Governing rule: anything that might go upstream (`fix/*`, `perf/*`) is branched from a
-> clean `master` and never built on top of fork-only work.
+> **The fork's roadmap lives in `implementation-plan.md`; start at its "Resume here" section.** Keep it current on any
+> status change, and read `tasks/lessons.md` at the start of every session. The old HTML plans (`implementation-plan.html`,
+> `plan-overview.html`) are retired: the Markdown plan replaced them on 2026-11-23, and their history is on the `notes`
+> branch. Never revive them.
+> Governing rule: anything that might go upstream (`fix/*`, `perf/*`) is branched from a clean `master` and never built on
+> top of fork-only work.
 >
-> **These files are local-only.** `/CLAUDE.md`, `/implementation-plan.html` and the retired `/plan-overview.html` are
-> listed in `.git/info/exclude`, so they stay untracked on disk through every branch checkout. A snapshot lives on the
-> orphan `notes` branch (`origin/notes`, `9906953`, 2026-11-04); refresh it from a separate worktree. Never commit them
-> to a `fix/*`, `perf/*` or `chore/*` branch, or they land in an upstream PR.
+> **The owner is not a software developer.** Keep the engineering rigorous, but write chat replies and the plan's
+> summaries in plain language: what a problem means for someone using the app, and what we will do about it. Technical
+> detail (`file:line`, IDs, mechanisms) belongs in the plan's technical sections and in commit messages.
+>
+> **These files are local-only.** `/CLAUDE.md`, `/implementation-plan.md` and `/tasks/` are listed in
+> `.git/info/exclude`, so they stay untracked on disk through every branch checkout. A snapshot lives on the orphan
+> `notes` branch (`origin/notes`); refresh it from a separate worktree after each change. Never commit them to a `fix/*`,
+> `perf/*` or `chore/*` branch, or they land in an upstream PR.
 
 ---
 
