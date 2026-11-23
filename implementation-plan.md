@@ -8,7 +8,7 @@ without dragging fork-only changes along with it.
 - **Fork work so far:** 48 commits (11 of them merges) on 15 branches, plus this plan on `notes`; `master` itself is
   untouched
 - **Status:** Stage F is finished, checked (201 checks and a real run of the app) and merged into `fork/main`
-  (local, not pushed). Smoother scrolling (6.1) is paused
+  (pushed to GitHub on 23 November). Smoother scrolling (6.1) is paused
 - **Written** 21 September 2026, **updated** 23 November 2026
 
 <a id="resume"></a>
@@ -79,8 +79,8 @@ down keep the technical detail for whoever does the work.
 
 ### What's next
 
-1. **Stage F is closed** ([Stage F progress](#stageFprogress)): merged into `fork/main` on 23 November (local,
-   not pushed). Only the upstream question is left, and you chose to decide it later.
+1. **Stage F is closed** ([Stage F progress](#stageFprogress)): merged into `fork/main` and pushed to GitHub on
+   23 November. Only the upstream question is left, and you chose to decide it later.
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -100,11 +100,11 @@ down keep the technical detail for whoever does the work.
 - **Stage F upstream:** *decided 23 November:* no fix is offered on its own. All of Stage F may be offered
   together once it is finished, and even that is still only a maybe. Asked again after the real-app run passed
   (23 November): "decide later". Still open.
-- **Pushing:** `fork/main`, `integrate/stage-f`, the eleven `fix/*` branches and the `notes` updates are all
-  local only; push when you want them on GitHub.
 
 ### Housekeeping
 
+- Pushed to GitHub on 23 November: `fork/main`, `integrate/stage-f`, the eleven Stage F `fix/*` branches and
+  `notes`. Not pushed: one local commit on `kk/laughing-pascal-710otn` (the 23 November re-check of the review).
 - This plan, `CLAUDE.md` and `tasks/lessons.md` are kept out of the code history on purpose (listed in
   `.git/info/exclude`), so they can never slip into a fix sent to the original author. Copies are saved
   on the `notes` branch: update them there after each change.
@@ -156,7 +156,7 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
   and fix what it found (one integration commit, then 5 review-fix commits), 201 checks pass
 - [x] Real runs of the app with all 11 fixes (23 November, two automated runs on a throwaway profile folder: 84 of 85
   checks pass, the 85th was the test script's mistake; your real files unchanged)
-- [x] Merge `integrate/stage-f` into `fork/main` (23 November, `75eddc74`, local, not pushed)
+- [x] Merge `integrate/stage-f` into `fork/main` (23 November, `75eddc74`, pushed)
 - [ ] Decide about offering Stage F upstream (23 November: "decide later")
 
 **Stage 2: exporting a zip**
@@ -527,7 +527,7 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 #### Stage F progress (23 November)
 
 **In short:** all eleven fixes are done, combined on `integrate/stage-f`, reviewed together, checked in the real
-app and merged into `fork/main` (23 November, `75eddc74`, local). Left: the upstream decision.
+app and merged into `fork/main` (23 November, `75eddc74`, pushed). Left: the upstream decision.
 
 | Branch | Commit | What changed | Checked by |
 |---|---|---|---|
