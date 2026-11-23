@@ -255,6 +255,11 @@ public class AppKeys : ReactiveObject
 			var hotkey = (Hotkey)t.GetProperty(prop.Name).GetValue(this);
 			hotkey.AddCanExecuteCondition(baseCanExecute);
 			hotkey.ID = prop.Name;
+			//Named here as well as in MainViewControl.RegisterKeyBindings, which runs after LoadKeybindings has named refused shortcuts
+			if (String.IsNullOrEmpty(hotkey.DisplayName))
+			{
+				hotkey.DisplayName = prop.GetCustomAttribute<MenuSettingsAttribute>().DisplayName;
+			}
 			keyMap.AddOrUpdate(hotkey);
 		}
 	}
