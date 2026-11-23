@@ -295,17 +295,27 @@ public class DivinityLoadOrder : ReactiveObject
 	/// <summary>
 	/// Rebuilds the order from the active mods. Entries marked Missing (mods that weren't installed when the order was loaded)
 	/// have no active mod, so they are put back after the entry they followed instead of being dropped.
+	/// An entry whose mod is installed now (isInstalled) stops being Missing, so the active mods decide whether it stays.
+	/// The new order is built aside and swapped in at the end, so Order is only incomplete between its Clear and AddRange.
 	/// </summary>
-	public void UpdateFrom(IEnumerable<DivinityModData> activeMods)
+	public void UpdateFrom(IEnumerable<DivinityModData> activeMods, Func<string, bool> isInstalled)
 	{
 		var previousOrder = Order.ToList();
-		Order.Clear();
-		AddRange(activeMods, true);
+		var rebuilt = activeMods.Where(x => x != null).Select(x => x.ToOrderEntry()).ToList();
+		var result = rebuilt;
+
+		foreach (var entry in previousOrder)
+		{
+			if (entry.Missing && isInstalled(entry.UUID))
+			{
+				entry.Missing = false;
+			}
+		}
 
 		if (previousOrder.Any(x => x.Missing))
 		{
 			//File each missing entry under the nearest earlier entry that is still in the order (null = the start)
-			var present = Order.Select(x => x.UUID).ToHashSet();
+			var present = rebuilt.Select(x => x.UUID).ToHashSet();
 			string anchor = null;
 			var missing = new List<(string Anchor, DivinityLoadOrderEntry Entry)>();
 			foreach (var entry in previousOrder)
@@ -320,15 +330,17 @@ public class DivinityLoadOrder : ReactiveObject
 				}
 			}
 			var missingAfter = missing.ToLookup(x => x.Anchor, x => x.Entry);
-			var rebuilt = Order.ToList();
-			Order.Clear();
-			Order.AddRange(missingAfter[null]);
+			result = new List<DivinityLoadOrderEntry>(rebuilt.Count + missing.Count);
+			result.AddRange(missingAfter[null]);
 			foreach (var entry in rebuilt)
 			{
-				Order.Add(entry);
-				Order.AddRange(missingAfter[entry.UUID]);
+				result.Add(entry);
+				result.AddRange(missingAfter[entry.UUID]);
 			}
 		}
+
+		Order.Clear();
+		Order.AddRange(result);
 	}
 
 	public bool OrderEquals(IEnumerable<string> orderList)
