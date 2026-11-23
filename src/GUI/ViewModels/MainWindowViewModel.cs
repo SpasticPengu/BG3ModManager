@@ -1127,6 +1127,9 @@ Directory the zip will be extracted to:
 					Settings.SetFrom<DivinityModManagerSettings, ReactiveAttribute>(settings);
 					Settings.ExtenderSettings.SetFrom(settings.ExtenderSettings);
 					Settings.ExtenderUpdaterSettings.SetFrom(settings.ExtenderUpdaterSettings);
+					//Window and Confirmations have no [Reactive], so the SetFrom above skips them
+					Settings.Window.SetFrom(settings.Window);
+					Settings.Confirmations.SetFrom(settings.Confirmations);
 				}
 			}
 		}
