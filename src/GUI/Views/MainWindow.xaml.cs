@@ -185,7 +185,12 @@ public partial class MainWindow : AdonisWindow, IViewFor<MainWindowViewModel>, I
 			win.Width = Width;
 			win.Height = Height;
 
-			win.Screen = Screen.AllScreens.IndexOf(Screen.FromHandle(_hwnd.Handle));
+			//In the Closed handler the window is already destroyed, and FromHandle(0) gives the primary screen,
+			//so keep the screen recorded while the window was open
+			if (_hwnd.Handle != IntPtr.Zero)
+			{
+				win.Screen = Screen.AllScreens.IndexOf(Screen.FromHandle(_hwnd.Handle));
+			}
 		}
 	}
 

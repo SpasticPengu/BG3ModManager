@@ -265,9 +265,11 @@ public static class DivinityFileUtils
 	/// Extracts a pak, skipping any file whose name would land outside outputDirectory (a crafted pak can name its files
 	/// "..\..\something"). Returns false when files were skipped.
 	/// </summary>
-	private static bool UncompressPackageContained(string pakPath, string outputDirectory, Func<PackagedFileInfo, bool> filter = null)
+	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.</param>
+	private static bool UncompressPackageContained(string pakPath, string outputDirectory, Func<PackagedFileInfo, bool> filter = null, List<string> skipped = null)
 	{
-		var skipped = new List<string>();
+		skipped ??= new List<string>();
+		var skippedBefore = skipped.Count;
 		var packager = new Packager();
 		packager.UncompressPackage(pakPath, outputDirectory, f =>
 		{
@@ -276,8 +278,9 @@ public static class DivinityFileUtils
 			skipped.Add(f.Name);
 			return false;
 		});
-		if (skipped.Count == 0) return true;
-		DivinityApp.Log($"Skipped {skipped.Count} file(s) in '{pakPath}' that would be written outside '{outputDirectory}':\n\t{String.Join("\n\t", skipped)}");
+		var skippedHere = skipped.Count - skippedBefore;
+		if (skippedHere == 0) return true;
+		DivinityApp.Log($"Skipped {skippedHere} file(s) in '{pakPath}' that would be written outside '{outputDirectory}':\n\t{String.Join("\n\t", skipped.Skip(skippedBefore))}");
 		return false;
 	}
 
@@ -320,7 +323,8 @@ public static class DivinityFileUtils
 		}
 	}
 
-	public static async Task<bool> ExtractPackageAsync(string pakPath, string outputDirectory, CancellationToken token, Func<PackagedFileInfo, bool>? filter = null)
+	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.</param>
+	public static async Task<bool> ExtractPackageAsync(string pakPath, string outputDirectory, CancellationToken token, Func<PackagedFileInfo, bool>? filter = null, List<string> skipped = null)
 	{
 		var task = await Task.Run(async () =>
 		{
@@ -329,7 +333,7 @@ public static class DivinityFileUtils
 			{
 				try
 				{
-					return UncompressPackageContained(pakPath, outputDirectory, filter);
+					return UncompressPackageContained(pakPath, outputDirectory, filter, skipped);
 				}
 				catch (Exception) { return false; }
 			}, TaskCreationOptions.AttachedToParent);

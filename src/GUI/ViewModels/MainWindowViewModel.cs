@@ -3684,7 +3684,6 @@ Directory the zip will be extracted to:
 			var gameDataFolder = Path.GetFullPath(Settings.GameDataPath);
 			var appDir = DivinityApp.GetAppDirectory();
 			var tempDir = Path.Combine(appDir, "_Temp_" + DateTime.Now.ToString(sysFormat + "_HH-mm-ss"));
-			Directory.CreateDirectory(tempDir);
 
 			if (String.IsNullOrEmpty(outputPath))
 			{
@@ -3703,6 +3702,7 @@ Directory the zip will be extracted to:
 
 			var incrementProgress = 1d / modPaks.Count;
 
+			Directory.CreateDirectory(tempDir);
 			try
 			{
 				using (var stream = File.OpenWrite(outputPath))
@@ -3776,8 +3776,18 @@ Directory the zip will be extracted to:
 					ShowAlert(msg, AlertType.Danger);
 				});
 			}
-
-			Directory.Delete(tempDir);
+			finally
+			{
+				// Also after a cancel (the return above) or a failed or cancelled pak write, which leaves its temporary pak in tempDir
+				try
+				{
+					Directory.Delete(tempDir, true);
+				}
+				catch (Exception ex)
+				{
+					DivinityApp.Log($"Error deleting the temporary folder '{tempDir}':\n{ex}");
+				}
+			}
 		}
 		else
 		{
@@ -4555,6 +4565,8 @@ Directory the zip will be extracted to:
 			RunInBackground(async (ctrl, t) =>
 			{
 				int successes = 0;
+				// Paks with entries whose paths point outside their folder: those entries are skipped, the rest is extracted
+				var unsafePaks = new List<string>();
 				foreach (var path in SelectedPakMods.Select(x => x.FilePath))
 				{
 					if (MainProgressToken.IsCancellationRequested) break;
@@ -4570,7 +4582,9 @@ Directory the zip will be extracted to:
 						{
 							destination = outputDirectory;
 						}
-						var success = await DivinityFileUtils.ExtractPackageAsync(path, destination, MainProgressToken.Token);
+						var skipped = new List<string>();
+						var success = await DivinityFileUtils.ExtractPackageAsync(path, destination, MainProgressToken.Token, null, skipped);
+						if (skipped.Count > 0) unsafePaks.Add($"{Path.GetFileName(path)} ({skipped.Count})");
 						if (success)
 						{
 							successes += 1;
@@ -4599,7 +4613,16 @@ Directory the zip will be extracted to:
 					}
 					else
 					{
-						ShowAlert($"Error occurred when extracting selected mods to '{dialog.SelectedPath}'", AlertType.Danger, 30);
+						var skippedText = unsafePaks.Count > 0 ? $"skipped files for safety in {String.Join(", ", unsafePaks)}: their paths point outside the folder they were extracted to (names in the log)" : "";
+						if (unsafePaks.Count > 0 && successes + unsafePaks.Count >= totalWork)
+						{
+							// The only problem was the skipped entries; everything else was extracted
+							ShowAlert($"Extracted selected mods to '{dialog.SelectedPath}', but {skippedText}", AlertType.Warning, 0);
+						}
+						else
+						{
+							ShowAlert($"Error occurred when extracting selected mods to '{dialog.SelectedPath}'{(skippedText != "" ? $". Also {skippedText}" : "")}", AlertType.Danger, 30);
+						}
 					}
 				});
 

@@ -45,14 +45,20 @@ public partial class AppUpdateWindowViewModel : ReactiveObject
 			}
 			else
 			{
-				// The update window stays open, so the update can be tried again
-				MainWindow.Self.ViewModel.ShowAlert("The update was cancelled or could not be downloaded", AlertType.Warning, 30);
+				// The update window stays open, so the update can be tried again. It covers the main window's alert bar,
+				// so also say it in a message box on top of the update window itself.
+				var message = "The update was cancelled or could not be downloaded";
+				MainWindow.Self.ViewModel.ShowAlert(message, AlertType.Warning, 30);
+				Xceed.Wpf.Toolkit.MessageBox.Show(MainWindow.Self.UpdateWindow, $"{message}. You can try again.", "Update Not Installed",
+					System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.OK, MainWindow.Self.MessageBoxStyle);
 			}
 		}
 		catch (Exception ex)
 		{
 			DivinityApp.Log($"Error updating program:\n{ex}");
 			IsVisible = false;
+			// The update window is hidden now, so the main window's alert bar is visible
+			MainWindow.Self.ViewModel.ShowAlert($"Error updating the program: {ex.Message}", AlertType.Danger, 60);
 		}
 	}
 
