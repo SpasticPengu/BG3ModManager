@@ -34,6 +34,18 @@ and `.bak-buildmod`; the first export would have overwritten it. A tracing agent
 that folder on the owner's machine and pick a name the app owns (`modsettings.lsx.bg3mm.bak`). Never assume
 a generic name such as `.bak` or `.tmp` is free.
 
+## 2026-11-23: an app launch the owner approved "once or twice" took eight
+
+**What happened:** for Stage F's second real-app run I asked to launch the app "once (maybe twice)". The UI
+Automation script needed four fixes on first contact with the real app (owned dialogs live in the main window's
+tree, order items have no UIA name, a dialog button ignores Invoke while inactive, `Write-Output` inside a function
+pollutes its return value), and one launch ran with a helper missing because its Edit had failed in the same batch.
+Eight launches in all, each a short window on the owner's screen.
+
+**Rule:** when asking for an app launch, say "a few short launches" unless the script has already run against this
+app; before each launch, read back every edit the launch depends on (a failed Edit does not stop the next call in
+the batch); and say the real count afterwards.
+
 ## 2026-11-23: plain language for the owner
 
 **What happened:** my status reports were full of developer jargon (awaiters, `SetFrom`, lists of
