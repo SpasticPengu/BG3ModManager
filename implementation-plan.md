@@ -35,10 +35,11 @@ down keep the technical detail for whoever does the work.
   but Microsoft no longer fixes security problems in it. Moving to .NET 10 first needs newer Visual
   Studio build tools on this PC.
 
-### What's next (proposed order)
+### What's next
 
 1. **Fix the bugs that lose data or crash the app** ([Stage F](#stageF)). Each fix is small and gets its
-   own branch, so it can be offered to the original author too.
+   own branch, so it can be offered to the original author too. *Decided 23 November: this goes first,
+   in the order of the Stage F checklist below.*
 2. **Measure before speeding anything up.** Two test runs on this PC: one shows what really makes
    startup slow, the other what makes search slow. The review found that the plan's guesses for both
    were partly wrong.
@@ -48,7 +49,6 @@ down keep the technical detail for whoever does the work.
 
 ### Decisions waiting on you
 
-- **Stage F:** do it before the export and import fixes (proposed), or finish scrolling first?
 - **Stage L (mod library):** add it to the plan as designed? It would come after "overrides in the load
   order" (6.2) and before exporting several orders at once (Stage 8).
 - **.NET 10:** when to move? It needs Visual Studio's 2026 build tools installed first.
@@ -81,15 +81,18 @@ down keep the technical detail for whoever does the work.
 - [ ] Point the updater and links at this fork (`chore/fork-identity`)
 - [ ] Decide the review's Stage 1 choices (version numbers, release automation, donation links)
 
-**Stage F: bugs that lose data or crash the app (proposed)**
+**Stage F: bugs that lose data or crash the app (started 23 November, in this order)**
+
+The first fix is the smallest and is sure to affect you, so it also proves the routine (new branch, build,
+check, commit) before the riskier ones. Crashes and lost load orders come next.
+- [ ] Remember window size, position and the admin-warning choice (`fix/settings-restore`)
 - [ ] Save or Export crashes when mods depend on each other in a loop (`fix/dependency-cycle`)
-- [ ] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`)
 - [ ] Saving drops mods that aren't installed from the order (`fix/order-keep-missing`)
+- [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
+- [ ] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`)
 - [ ] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`)
 - [ ] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`)
 - [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
-- [ ] Remember window size, position and the admin-warning choice (`fix/settings-restore`)
-- [ ] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`)
 - [ ] Updater: no "up to date" after a failed check, no closing on a cancelled download (`fix/updater-errors`)
 - [ ] A booby-trapped mod can't write outside the Mods folder (`fix/path-containment`)
 - [ ] Never offer the game's own files for deletion (`fix/duplicate-dialog-larian`)
@@ -233,7 +236,7 @@ On 2026-11-03 a cloud session ran a read-only, multi-agent review of `master`, `
 
 ### What changed in this plan
 
-- New [Stage F](#stageF): confirmed crash, order-loss, settings and security bugs, proposed before Stage 2.
+- New [Stage F](#stageF): confirmed crash, order-loss, settings and security bugs; accepted 2026-11-23, before Stage 2.
 - [Stage 0](#stage0): .NET 8 out of support, an SDK mismatch, three more build traps; the 58 `MeasureText` exceptions are not caused by `=` dividers.
 - [Stage 2](#stage2): E1 to E4 narrowed or corrected, E6 dropped, four new export defects.
 - [Stage 3](#stage3): I1 refuted; the real silent order loss is importing a "Current" order; five new import defects.
@@ -440,7 +443,7 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 
 `UPSTREAMABLE` `one fix/* branch per row, each cut from clean master`
 
-> **Proposed 2026-11-23, not yet accepted (see Resume here).** Every bug below is in upstream `master` today. Each was confirmed by reading the code, none has been reproduced, and most are a few lines to fix. Several lose load orders silently, which is why this stage is proposed before Stage 2. **Back up `modsettings.lsx` and the `Orders` folder before testing any of them**, and start each branch with a Windows repro or an instrumented PASS/FAIL check.
+> **Accepted 2026-11-23; work order is the Stage F checklist at the top.** Every bug below is in upstream `master` today. Each was confirmed by reading the code, none has been reproduced, and most are a few lines to fix. Several lose load orders silently, which is why this stage goes before Stage 2. **Back up `modsettings.lsx` and the `Orders` folder before testing any of them**, and start each branch with a Windows repro or an instrumented PASS/FAIL check.
 
 | Branch (proposed) | Bug, as a user sees it | Where (`master`) | Fix sketch |
 |---|---|---|---|
