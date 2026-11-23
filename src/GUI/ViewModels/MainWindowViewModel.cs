@@ -1758,7 +1758,8 @@ Directory the zip will be extracted to:
 		{
 			DivinityApp.Log($"Profile folder not found at '{PathwayData.AppDataProfilesPath}'.");
 		}
-		return null;
+		// Not null: RefreshAsync adds these to Profiles, and AddRange(null) throws (no profiles falls back to the default order)
+		return [];
 	}
 
 	private static readonly DivinityLoadOrder _fallbackOrder = new DivinityLoadOrder()
@@ -2316,10 +2317,14 @@ Directory the zip will be extracted to:
 			var lastExported = SavedModOrderList.FirstOrDefault(x => x.Name == DivinityApp.PATH_LAST_EXPORTED_NAME);
 			if (lastExported != null && lastExported.Order.Count > 0)
 			{
+				// An unreadable file (cut off, not valid XML, locked) reads as empty too; say so instead of "reset externally"
+				var question = modSettingsData.ReadError != null
+					? $"The game's mod list ('{modSettingsPath.ReplaceSpecialPaths()}') could not be read: {modSettingsData.ReadError}\nUse the last exported mod order?"
+					: "It looks like the load order was reset externally. Use the last exported mod order?";
 				var doReset = await Observable.Start(() =>
 				{
 					MessageBoxResult result = Xceed.Wpf.Toolkit.MessageBox.Show(Window,
-					"It looks like the load order was reset externally. Use the last exported mod order?",
+					question,
 					"Restore Load Order",
 					MessageBoxButton.YesNo,
 					MessageBoxImage.Warning,
@@ -2336,9 +2341,11 @@ Directory the zip will be extracted to:
 				{
 					// Restore into the profile (Current) only. Writing into a saved order emptied LastExported when it was the
 					// first saved order (SetOrder on itself), and otherwise overwrote that first order.
-					List<string> orderList = [];
-					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(lastExported.Order.Select(x => x.UUID));
+					var outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
+					var finalOrder = DivinityModDataLoader.BuildOutputList(lastExported.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, SelectedAdventureMod);
+					// The profile mirrors what is written to modsettings.lsx: BuildOutputList leaves out mods that aren't installed and
+					// GenerateModSettingsFile those whose ID isn't a GUID (an older LastExported can hold both)
+					var orderList = finalOrder.Where(DivinityModDataLoader.CanWriteToModSettings).Select(x => x.UUID).ToList();
 
 					await Observable.Start(() =>
 					{
@@ -2346,8 +2353,6 @@ Directory the zip will be extracted to:
 						SelectedProfile.ActiveMods.AddRange(orderList.Select(ProfileActiveModDataFromUUID));
 					}, RxApp.MainThreadScheduler);
 
-					var outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
-					var finalOrder = DivinityModDataLoader.BuildOutputList(lastExported.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, SelectedAdventureMod);
 					if (!await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder))
 					{
 						ShowAlert($"Could not write the restored load order to '{outputPath}', so the game does not have it yet. Use Export Order to Game to try again.", AlertType.Danger);
@@ -2578,7 +2583,8 @@ Directory the zip will be extracted to:
 		}, RxApp.MainThreadScheduler);
 		if (ActiveMods.Count == 0)
 		{
-			RunInBackground(CheckForEmptyOrderAsync);
+			// BuildModOrderList sets IsLoadingOrder; a throw before it clears the flag would leave the window locked
+			RunInBackground(CheckForEmptyOrderAsync, () => IsLoadingOrder = false);
 		}
 		return Unit.Default;
 	}
