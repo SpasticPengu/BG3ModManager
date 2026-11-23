@@ -20,7 +20,19 @@ Edit tool normalised every line. An upstream PR like that is unreviewable.
 
 **Rule:** before editing a file, check `git ls-files --eol <file>`. For an `i/mixed` file (11 on `master`,
 listed by `git ls-files --eol | grep i/mixed`), splice the change byte-exactly with a script that keeps the
-surrounding line endings, and always read `git diff --stat` before building or committing.
+surrounding line endings, and always read `git diff --stat` before building or committing. Endings can change
+even inside one function (`ExportModSettingsToFileAsync`: two CRLF lines, then LF): `stageF-harness\splice.py`
+then reports "not found", and `splice2.py` (any ending per line, unchanged leading lines kept byte-exact) works.
+
+## 2026-11-23: a backup name can destroy the user's own backup
+
+**What happened:** my first design for fix 6 kept the previous `modsettings.lsx` as `modsettings.lsx.bak`.
+The owner already keeps a hand-made `modsettings.lsx.bak` (934 mods) in that folder, plus `.bak-before-asl`
+and `.bak-buildmod`; the first export would have overwritten it. A tracing agent caught it before any run.
+
+**Rule:** before the app writes any new file next to the user's files (a backup, a temp file, a marker), list
+that folder on the owner's machine and pick a name the app owns (`modsettings.lsx.bg3mm.bak`). Never assume
+a generic name such as `.bak` or `.tmp` is free.
 
 ## 2026-11-23: plain language for the owner
 

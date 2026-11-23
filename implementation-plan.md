@@ -28,15 +28,21 @@ down keep the technical detail for whoever does the work.
   23 November. Most of it holds up, and it found about 20 bugs the plan didn't know about. Some of them
   can quietly lose a load order, crash the app or reset settings. They are collected in
   [Stage F](#stageF).
-- **Stage F is under way: 5 of its 11 fixes are done** (23 November), each on its own branch, checked by a
-  small test program and in one real run of the app (all passed). An independent review then found a few
-  flaws in them, now fixed and re-checked. They fix: the window position and the admin-warning choice
-  being forgotten; Save or Export crashing when mods depend on each other in a loop; Save deleting the mods
-  of an order that aren't installed; errors in background work leaving the app stuck on "Loading...";
-  and a single-letter shortcut crashing every launch. Two extra problems turned up and were fixed on the way:
-  Export left out a dependency's own dependencies, and a restored window could land on an unplugged monitor.
-  Your own data: none of your mods loop, 13 of your 16 saved orders hold mods that aren't installed (a Save
-  would have deleted them), and 3 orders were missing one dependency each.
+- **Stage F is under way: 7 of its 11 fixes are done** (23 November), each on its own branch. Fixes 1 to 5
+  were checked by a small test program and in one real run of the app (all passed); an independent review
+  then found a few flaws in them, now fixed and re-checked. They fix: the window position and the
+  admin-warning choice being forgotten; Save or Export crashing when mods depend on each other in a loop;
+  Save deleting the mods of an order that aren't installed; errors in background work leaving the app stuck
+  on "Loading..."; and a single-letter shortcut crashing every launch. Two extra problems turned up and were
+  fixed on the way: Export left out a dependency's own dependencies, and a restored window could land on an
+  unplugged monitor. Your own data: none of your mods loop, 13 of your 16 saved orders hold mods that aren't
+  installed (a Save would have deleted them), and 3 orders were missing one dependency each.
+- **Fixes 6 and 7 are done too** (test program and independent review, not yet the real app). Export to game
+  now keeps a copy of the game's previous mod list, never jumps to another saved order, never locks the app,
+  and refuses to write a list the game couldn't read. The "use the last exported order?" question at startup
+  can no longer empty that backup; on your orders, answering Yes would have overwritten your saved order
+  "5 Player - Hard UW". Your own `modsettings.lsx.bak` (934 mods, 19 September) is safe: the app's new
+  backup uses its own name, `modsettings.lsx.bg3mm.bak`.
 - **Everything else hasn't started.** The review sketched designs for most stages, and a new
   [Stage L](#stageL) for the mod library you asked for: keep every version of each mod, and let each
   load order use its own versions.
@@ -111,7 +117,7 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
   independent review whose findings are fixed in follow-up commits (see [Stage F progress](#stageFprogress))
 - [x] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`, `1ff34c38`).
   Also: it refuses to write a list the game couldn't read, and saved orders can no longer be left half-written
-- [x] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`, `4238fba4`). On your
+- [x] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`, `da623aaf`). On your
   orders a Yes would have overwritten "5 Player - Hard UW"; one backup per profile is left for later (rarely matters)
 - [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
 - [ ] Updater: no "up to date" after a failed check, no closing on a cancelled download (`fix/updater-errors`)
@@ -485,8 +491,8 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 
 #### Stage F progress (23 November)
 
-**In short:** the first five fixes are done and checked outside the app. The next chat continues with
-`fix/export-to-game`.
+**In short:** seven fixes are done; the first five are also checked in the real app. Next:
+`fix/modsettings-write-guard`.
 
 | Branch | Commit | What changed | Checked by |
 |---|---|---|---|
@@ -495,6 +501,8 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 | `fix/order-keep-missing` | `bb07d2bf`, `78924a47` | `LoadModOrder` sets `entry.Missing`; `DivinityLoadOrder.UpdateFrom(activeMods, isInstalled)` (one linear pass, swapped in at the end) puts Missing entries back after the entry they followed, and clears the flag for a mod installed since. After Export, Current, the profile's list and LastExported mirror only non-Missing entries (what was written). Save As still drops missing mods on purpose; Clear Missing Mods still removes them; Export's missing-mods notice now lists them. | 32 PASS: 16 cases + 1,000-entry timing (0.45 ms; a first O(n²) draft took 19 ms) + the 13 saved orders holding missing mods, all kept in order. App run: a saved order kept its not-installed mod. |
 | `fix/background-errors` | `7f19c08c`, `11016f41` | `ReactiveExtensions.ScheduleAsyncSafe`; every `ScheduleAsync` in `src` now goes through it (15 `RunInBackground` jobs, Save, the SE manifest check): log, `ShowAlert`, then cleanup of only what the job set (`ResetBusyState` for refreshes; `IsRefreshing` + overlay for ImportMods; `IsLoadingOrder` for Export to game and Save, since the first export builds LastExported through `AddNewModOrder` → `BuildModOrderList`; `OnMainProgressComplete` for zip, extract and the SE download, guarded there by `progressDone`). | 11 PASS (task pool, current-thread and event-loop schedulers): master's error reaches no handler (only `UnobservedTaskException` after a forced GC); errors before and after an await are reported, cancellation is not, the 2 s delay and disposal still work. |
 | `fix/hotkey-validation` | `c8c21eed`, `2cc1c6c3` | `Hotkey.IsValidGesture` (asks `KeyGesture` itself); the editor refuses and says the modifier must still be held when the key is released; `LoadKeybindings` skips saved invalid ones and names them (`AppKeys` now sets `DisplayName` from `[MenuSettings]` at construction). | 17 PASS: the startup `KeyBinding` throws for a plain L; `IsValidGesture` agrees with it on 16 pairs. App run: started with a saved plain L, warned, dropped it (the run showed the then-blank name, fixed in `2cc1c6c3`). |
+| `fix/export-to-game` | `1ff34c38` | `DivinityFileUtils.WriteFileSafelyAsync`: a uniquely named temp file next to the target, flushed, an optional check on it, the old file copied to a backup path, then one rename (a symbolic link is written through). `ExportModSettingsToFileAsync` uses it with backup `modsettings.lsx.bg3mm.bak` (the owner keeps a hand-made 934-mod `modsettings.lsx.bak` in `PlayerProfiles\Public`) and a read-back check: every non-ignored mod written must parse back with the app's own reader, so a path UUID (CLAIM-15) or a Version64 of 2^63 or more (LOAD-06) now fails the export and keeps the old file. `ExportLoadOrderToFileAsync` (Save of a saved order, LastExported) writes through it too: HARV-62 for those paths, Save As still writes in place. `ExportLoadOrder` runs on the UI thread. LastExported is replaced only after a successful write; a new entry goes in at index 1, where `BuildModOrderList` puts it, with the selection kept, never through `AddNewModOrder`. The failure message names the likely causes. | 25 PASS: master's in-place write, its empty file after a failed write, its unreadable file for a path UUID and for version 2^63, and its selection jump are reproduced; the fix keeps the target on a locked or read-only file and on a refused or throwing check, keeps `.bg3mm.bak`, leaves the user's own `.bak` alone, and survives 8 overlapping writes on one UI thread; `BackupCurrentLoadOrderAsync`, run on the real view model, inserts or updates LastExported with the selection kept. Not run: the symbolic-link case (needs Developer Mode). Review: 1 major (a "never back up an empty order" rule would make the startup prompt nag a user who exports an empty list on purpose; dropped), 1 minor (insert position), 2 nits (shared temp name, symlink); all fixed in the commit. |
+| `fix/restore-prompt` | `da623aaf` | `DivinityLoadOrder.SetOrder` copies before clearing (alias-safe; the order overload delegates to the list one). `CheckForEmptyOrderAsync` writes into no saved order: the profile's mods are cleared and refilled from LastExported, `modsettings.lsx` is written from it, an alert says when that write fails (the game does not have the list yet), then `BuildModOrderList(0)` shows Current. HARV-54 (one LastExported for all profiles) is left for later: it needs a profile set without "Public", and its fix touches `BackupCurrentLoadOrderAsync`. | 9 PASS: master's restore reproduced emptying LastExported, and, on the owner's 16 saved orders, overwriting "5 Player - Hard UW" (73 mods) with LastExported's 29; the fixed `SetOrder` keeps itself, keeps its own list, applies a filter over it; an IL scan of the built method finds no `SetOrder` and a profile `Clear`. Not run: the prompt flow itself (modal dialog). Review: ship with nits (the alert wording, done). |
 
 **How the checks run.** A throwaway console program references the built `bin\Debug` DLLs and logs PASS/FAIL;
 one `<Name>Check.cs` per branch, built alone because each branch only has its own fix. It is kept outside the
@@ -502,6 +510,16 @@ repo in the session notes folder, `...\side-session-notes\local_16579313-3951-4f
 (`run-check.ps1 <Name>` builds and runs it), with `splice.py` for byte-exact edits of mixed-ending files
 (see `tasks/lessons.md`) and `sync-notes.sh` for the `notes` branch. `modsettings.lsx` was backed up to
 `...\backups\2026-11-23\` in the same folder (hash-checked).
+
+**Fixes 6 onward** were done in a second side session, in this checkout, one branch at a time. Their checks
+(`ExportToGameCheck.cs`, `RestorePromptCheck.cs`, ...) are in the same `stageF-harness\harness` folder and run
+against `bin\Debug` after `stageF-harness\build-debug.ps1` (a Debug build of the .sln that prints only errors).
+`splice2.py` there handles snippets whose line endings change inside one function (`DivinityModDataLoader.cs`
+has some). Before each fix, six read-only agents traced all six remaining bugs on master and designed the
+fixes; after each commit, one independent read-only reviewer tried to break it, and its findings were fixed
+in the same commit. `modsettings.lsx` and the 17 order files were backed up (hash-checked) to
+`...\side-session-notes\local_e41f79c8-ab41-48e5-b759-9212d1b0b757\backups\2026-11-23-2035\`; no check writes
+outside a temp folder.
 
 **Real app run (23 November, with the owner's OK).** A throwaway worktree with all five fixes (before the
 follow-ups) was built and launched with seeded settings, a plain-L shortcut and a test order holding a
