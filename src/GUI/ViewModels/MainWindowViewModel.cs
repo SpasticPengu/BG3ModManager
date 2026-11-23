@@ -2854,11 +2854,8 @@ Directory the zip will be extracted to:
 
 	private void ExportLoadOrder()
 	{
-		RunInBackground(async (ctrl, t) =>
-		{
-			await ExportLoadOrderAsync();
-			return Disposable.Empty;
-		}, () => IsLoadingOrder = false);
+		// The UI thread, like SaveLoadOrder: the export updates the bound order list and the profile's mods
+		RxApp.MainThreadScheduler.ScheduleAsyncSafe(async (ctrl, t) => await ExportLoadOrderAsync(), ex => ReportBackgroundError(ex, () => IsLoadingOrder = false));
 	}
 
 	private async Task BackupCurrentLoadOrderAsync()
@@ -2880,7 +2877,15 @@ Directory the zip will be extracted to:
 					updatedOrder = true;
 				}
 			}
-			if (!updatedOrder) AddNewModOrder(backupOrder);
+			if (!updatedOrder)
+			{
+				// Not AddNewModOrder: it rebuilds the order list and selects another order, which the export then copies into Current.
+				// Index 1 is where BuildModOrderList puts LastExported; the selected order stays selected.
+				var selectedOrder = SelectedModOrder;
+				SavedModOrderList.Add(backupOrder);
+				ModOrderList.Insert(Math.Min(1, ModOrderList.Count), backupOrder);
+				SelectedModOrderIndex = ModOrderList.IndexOf(selectedOrder);
+			}
 		}
 		catch (Exception ex)
 		{
@@ -2946,7 +2951,8 @@ Directory the zip will be extracted to:
 			var finalOrder = DivinityModDataLoader.BuildOutputList(SelectedModOrder.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, outputAdventureMod);
 			var result = await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder);
 
-			await BackupCurrentLoadOrderAsync();
+			// Only a successful export replaces the LastExported backup
+			if (result) await BackupCurrentLoadOrderAsync();
 
 			var dir = GetLarianStudiosAppDataFolder();
 			if (SelectedModOrder.Order.Any(x => !x.Missing))
@@ -3001,7 +3007,7 @@ Directory the zip will be extracted to:
 			{
 				await Observable.Start(() =>
 				{
-					string msg = $"Problem exporting load order to '{outputPath}'. Is the file locked?";
+					string msg = $"Problem exporting load order to '{outputPath}'. The file was left unchanged. Is it locked or read-only? Export also stops if the new file could not be read back, for example because a mod's ID is not a valid UUID.";
 					ShowAlert(msg, AlertType.Danger);
 					View.MainWindowMessageBox_OK.WindowBackground = MainViewControl.MessageBoxErrorBackgroundBrush;
 					View.MainWindowMessageBox_OK.Closed += MainWindowMessageBox_Closed_ResetColor;

@@ -340,6 +340,47 @@ public static class DivinityFileUtils
 		}
 	}
 
+	/// <summary>
+	/// Replaces a file without ever leaving it half-written: the bytes go to a temporary file next to it, which one rename then
+	/// swaps in. If backupPath is set, the previous file is copied there first. If verify is set, it gets the temporary file's
+	/// path, and the swap only happens when it returns true.
+	/// </summary>
+	/// <returns>False when verify refused the new file. Throws when writing or swapping fails. In both cases the target is unchanged.</returns>
+	public static async Task<bool> WriteFileSafelyAsync(string path, byte[] contents, string backupPath = null, Func<string, Task<bool>> verify = null)
+	{
+		// A symbolic link stays a link: replace the file it points to (LinkTarget is null for a missing file or a plain one)
+		var info = new FileInfo(path);
+		if (info.LinkTarget != null) path = info.ResolveLinkTarget(true)?.FullName ?? path;
+		// A unique name, so two writes of the same file at once can't use or delete each other's temporary file
+		var tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
+		try
+		{
+			using (var fs = new System.IO.FileStream(tempPath, System.IO.FileMode.Create, System.IO.FileAccess.Write, System.IO.FileShare.None, 4096, true))
+			{
+				await fs.WriteAsync(contents);
+				fs.Flush(true);
+			}
+			if (verify != null && !await verify(tempPath))
+			{
+				File.Delete(tempPath);
+				return false;
+			}
+			if (backupPath != null && File.Exists(path))
+			{
+				// File.Copy keeps a read-only attribute, which would block the next backup
+				if (File.Exists(backupPath)) File.SetAttributes(backupPath, FileAttributes.Normal);
+				File.Copy(path, backupPath, true);
+			}
+			File.Move(tempPath, path, true);
+			return true;
+		}
+		catch
+		{
+			try { File.Delete(tempPath); } catch { }
+			throw;
+		}
+	}
+
 	public static async Task<byte[]> LoadFileAsBytesAsync(string path, CancellationToken token)
 	{
 		try
