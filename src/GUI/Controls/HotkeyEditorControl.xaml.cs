@@ -1,4 +1,5 @@
 ﻿using DivinityModManager.Models.App;
+using DivinityModManager.ViewModels;
 
 using System.Windows;
 using System.Windows.Controls;
@@ -113,6 +114,13 @@ public partial class HotkeyEditorControl : UserControl
 			key == Key.OemClear ||
 			key == Key.Apps)
 		{
+			return;
+		}
+
+		// A letter or digit needs Ctrl, Alt or Windows: WPF rejects it otherwise, which crashed the next startup
+		if (!Hotkey.IsValidGesture(key, modifiers))
+		{
+			Services.Get<SettingsWindowViewModel>()?.ShowAlert("A letter or digit needs Ctrl, Alt or Windows held as well", AlertType.Warning, 10);
 			return;
 		}
 

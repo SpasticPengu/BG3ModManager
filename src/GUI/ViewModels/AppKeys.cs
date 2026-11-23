@@ -204,15 +204,26 @@ public class AppKeys : ReactiveObject
 		{
 			if (DivinityJsonUtils.TrySafeDeserializeFromPath<Dictionary<string, Hotkey>>(filePath, out var allKeybindings))
 			{
+				var invalid = new List<string>();
 				foreach (var kvp in allKeybindings)
 				{
 					var existingHotkey = All.FirstOrDefault(x => x.ID.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase));
 					if (existingHotkey != null)
 					{
+						//Older versions saved a letter or digit with no Ctrl, Alt or Windows, which crashed every startup
+						if (!Hotkey.IsValidGesture(kvp.Value.Key, kvp.Value.Modifiers))
+						{
+							invalid.Add($"{existingHotkey.DisplayName} ({kvp.Value.Key})");
+							continue;
+						}
 						existingHotkey.Key = kvp.Value.Key;
 						existingHotkey.Modifiers = kvp.Value.Modifiers;
 						existingHotkey.UpdateDisplayBindingText();
 					}
+				}
+				if (invalid.Count > 0)
+				{
+					vm.ShowAlert($"Reset these shortcuts to their defaults, because a letter or digit needs Ctrl, Alt or Windows held as well: {String.Join(", ", invalid)}", AlertType.Warning);
 				}
 				return true;
 			}
