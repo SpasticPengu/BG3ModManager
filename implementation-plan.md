@@ -28,8 +28,9 @@ down keep the technical detail for whoever does the work.
   23 November. Most of it holds up, and it found about 20 bugs the plan didn't know about. Some of them
   can quietly lose a load order, crash the app or reset settings. They are collected in
   [Stage F](#stageF).
-- **Stage F is under way: 5 of its 11 fixes are done** (23 November), each on its own branch and checked by
-  a small test program, not yet in the real app. They fix: the window position and the admin-warning choice
+- **Stage F is under way: 5 of its 11 fixes are done** (23 November), each on its own branch, checked by a
+  small test program and in one real run of the app (all passed). An independent review then found a few
+  flaws in them, now fixed and re-checked. They fix: the window position and the admin-warning choice
   being forgotten; Save or Export crashing when mods depend on each other in a loop; Save deleting the mods
   of an order that aren't installed; errors in background work leaving the app stuck on "Loading...";
   and a single-letter shortcut crashing every launch. Two extra problems turned up and were fixed on the way:
@@ -66,9 +67,8 @@ down keep the technical detail for whoever does the work.
   donation links (Stage 1), whether fuzzy search reorders the active list (Stage 5), and the open
   questions on overrides and categories (Stage 6).
 - **Where the review files live:** on their own branch (now), or next to this plan on the `notes` branch.
-- **Stage F:** may I start the app once to confirm the finished fixes? It opens a window for a minute or
-  two; your mod list file is backed up first. And: offer each fix to the original author as it is done,
-  or all of Stage F together at the end?
+- **Stage F:** offer each fix to the original author as it is done, or all of Stage F together at the end?
+  (The real-app check of fixes 1 to 5 is done: it passed.)
 
 ### Housekeeping
 
@@ -107,7 +107,8 @@ check, commit) before the riskier ones. Crashes and lost load orders come next.
   saved orders hold 1 to 16 such mods each; a Save would have deleted them
 - [x] Show errors from background work instead of hanging on "Loading..." (`fix/background-errors`, `7f19c08c`)
 - [x] Every launch crashes after a hotkey is set to a single letter (`fix/hotkey-validation`, `c8c21eed`)
-- [ ] One real launch of the app to confirm the five fixes above (needs your OK; see [Stage F progress](#stageFprogress))
+- [x] One real launch of the app to confirm the five fixes above (23 November, all 17 checks passed), plus an
+  independent review whose findings are fixed in follow-up commits (see [Stage F progress](#stageFprogress))
 - [ ] Export to game: keep a backup, don't switch orders by itself, don't lock up (`fix/export-to-game`)
 - [ ] The "use the last exported order?" prompt can wipe the backup (`fix/restore-prompt`)
 - [ ] Never write a broken mod ID into the game's mod list file (`fix/modsettings-write-guard`)
@@ -488,9 +489,9 @@ At that point: **478 MB** private / 559 MB working set, 24.2 s CPU, 59 threads, 
 |---|---|---|---|
 | `fix/settings-restore` | `f4d3d737` | `Window`/`Confirmations` copied in place after `SetFrom` (`WindowSettings.SetFrom`). Also `ApplyWindowPosition` keeps negative coordinates when the title bar is on a connected screen (else default position), and `UpdateWindowSettings` skips a minimized window (-32000). | 13 PASS: master loses both values, the fix keeps them across two launches, same instances, null objects in the file; the on-screen test. |
 | `fix/dependency-cycle` | `9f854767` | `GetDependencyMods` marks a dependency before recursing. **New finding:** master also dropped dependencies of dependencies (every recursive result was already in `addedMods`, so the caller never added it), losing even active mods for an order M, D, E with M→D→E. Adventure added once. | 13 cases (master: 5 stack overflows, 2 drops). Scan of 1,132 installed mods: no self or loop dependencies; 45 mods have depth-2 dependencies; over the 16 saved orders the fix only adds 1 missing dependency in 3 orders. |
-| `fix/order-keep-missing` | `bb07d2bf` | `LoadModOrder` sets `entry.Missing`; `DivinityLoadOrder.UpdateFrom` (one linear pass) puts Missing entries back after the entry they followed. Save As still drops missing mods on purpose; Clear Missing Mods still removes them; Export's missing-mods notice now lists them. | 13 cases + 1,000-entry timing (0.4 ms; a first O(n²) draft took 19 ms). 13 of 16 saved orders hold 1 to 16 missing mods, all kept in order. |
-| `fix/background-errors` | `7f19c08c` | `ReactiveExtensions.ScheduleAsyncSafe` + `RunInBackground` for all 15 `ScheduleAsync` sites: log, `ShowAlert`, then per-site cleanup (`ResetBusyState` for refreshes, ImportMods and Export to game; `OnMainProgressComplete` for zip, extract and the SE download). | 7 PASS on `RxApp.TaskpoolScheduler`: master's error reaches no handler (only `UnobservedTaskException` after a forced GC); the fix reports errors before and after an await, ignores cancellation, keeps the 2 s delay and disposal. |
-| `fix/hotkey-validation` | `c8c21eed` | `Hotkey.IsValidGesture` (asks `KeyGesture` itself); the editor refuses and explains; `LoadKeybindings` skips and names saved invalid ones. | 17 PASS: the startup `KeyBinding` throws for a plain L; `IsValidGesture` agrees with it on 16 pairs. |
+| `fix/order-keep-missing` | `bb07d2bf`, `78924a47` | `LoadModOrder` sets `entry.Missing`; `DivinityLoadOrder.UpdateFrom(activeMods, isInstalled)` (one linear pass, swapped in at the end) puts Missing entries back after the entry they followed, and clears the flag for a mod installed since. After Export, Current, the profile's list and LastExported mirror only non-Missing entries (what was written). Save As still drops missing mods on purpose; Clear Missing Mods still removes them; Export's missing-mods notice now lists them. | 32 PASS: 16 cases + 1,000-entry timing (0.45 ms; a first O(n²) draft took 19 ms) + the 13 saved orders holding missing mods, all kept in order. App run: a saved order kept its not-installed mod. |
+| `fix/background-errors` | `7f19c08c`, `11016f41` | `ReactiveExtensions.ScheduleAsyncSafe`; every `ScheduleAsync` in `src` now goes through it (15 `RunInBackground` jobs, Save, the SE manifest check): log, `ShowAlert`, then cleanup of only what the job set (`ResetBusyState` for refreshes; `IsRefreshing` + overlay for ImportMods; `IsLoadingOrder` for Export to game and Save, since the first export builds LastExported through `AddNewModOrder` → `BuildModOrderList`; `OnMainProgressComplete` for zip, extract and the SE download, guarded there by `progressDone`). | 11 PASS (task pool, current-thread and event-loop schedulers): master's error reaches no handler (only `UnobservedTaskException` after a forced GC); errors before and after an await are reported, cancellation is not, the 2 s delay and disposal still work. |
+| `fix/hotkey-validation` | `c8c21eed`, `2cc1c6c3` | `Hotkey.IsValidGesture` (asks `KeyGesture` itself); the editor refuses and says the modifier must still be held when the key is released; `LoadKeybindings` skips saved invalid ones and names them (`AppKeys` now sets `DisplayName` from `[MenuSettings]` at construction). | 17 PASS: the startup `KeyBinding` throws for a plain L; `IsValidGesture` agrees with it on 16 pairs. App run: started with a saved plain L, warned, dropped it (the run showed the then-blank name, fixed in `2cc1c6c3`). |
 
 **How the checks run.** A throwaway console program references the built `bin\Debug` DLLs and logs PASS/FAIL;
 one `<Name>Check.cs` per branch, built alone because each branch only has its own fix. It is kept outside the
@@ -499,9 +500,21 @@ repo in the session notes folder, `...\side-session-notes\local_16579313-3951-4f
 (see `tasks/lessons.md`) and `sync-notes.sh` for the `notes` branch. `modsettings.lsx` was backed up to
 `...\backups\2026-11-23\` in the same folder (hash-checked).
 
-**Not yet done for these five:** a launch of the real app. Worth checking there: the window comes back
-where it was (fix 1); a `keybindings.json` holding a plain `L` starts with a warning (fix 5); loading an
-order with a missing mod and saving keeps it (fix 3). Needs the owner's OK, because it opens a window.
+**Real app run (23 November, with the owner's OK).** A throwaway worktree with all five fixes (before the
+follow-ups) was built and launched with seeded settings, a plain-L shortcut and a test order holding a
+not-installed mod; `stageF-harness-v2\stagef-apprun.ps1` drives it with UI Automation only (no mouse or
+keyboard). 17 PASS: the window opened at the saved 300,120 1500x900; position and admin-warning choice survived
+startup and close; the L shortcut was dropped with a warning; Save kept the missing mod in place;
+`modsettings.lsx` and the game's Script Extender files were unchanged. The app answers no UI Automation while it
+loads mods (loading runs on its UI thread, CLAIM-07), so the script finds the window through the process.
+
+**Independent review (workflow, 5 reviewers + 2 skeptics).** 9 findings: 5 confirmed, 3 contested, 1 refuted;
+all confirmed and contested ones are fixed in the follow-up commits above and were re-reviewed. Left on purpose:
+ExportLoadOrderAsync still rebuilds the order on a pool thread while the 250 ms rebuild can run on the UI thread
+(an old race, removed when `fix/export-to-game` moves export to the UI thread; until then fix 3's new list reads
+in that path can throw in the same tiny window); and inside `SaveLoadOrderAsync` an Export failure is caught by
+its own try, so it cannot clear `IsLoadingOrder` (also `fix/export-to-game`'s ground). Checks for the follow-ups:
+`stageF-harness-v2` (`run-check.ps1 <Name> [-Bin <worktree>\bin\Debug]`, one obj folder per check).
 
 **Facts for the next fixes.** The owner's real install is `Documents\BG3 Modding\BG3 Mod Manager`
 (1.0.12.9, 16 saved orders, Save Window Location on, auto-add dependencies on). The active `Public` order
