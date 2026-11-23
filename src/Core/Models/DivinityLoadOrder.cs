@@ -282,14 +282,15 @@ public class DivinityLoadOrder : ReactiveObject
 
 	public void SetOrder(IEnumerable<DivinityLoadOrderEntry> nextOrder)
 	{
+		// Copy first: nextOrder may be this order's own list, or a query over it, which Clear would empty
+		var entries = nextOrder.ToList();
 		Order.Clear();
-		Order.AddRange(nextOrder);
+		Order.AddRange(entries);
 	}
 
 	public void SetOrder(DivinityLoadOrder nextOrder)
 	{
-		Order.Clear();
-		Order.AddRange(nextOrder.Order);
+		SetOrder(nextOrder.Order);
 	}
 
 	/// <summary>

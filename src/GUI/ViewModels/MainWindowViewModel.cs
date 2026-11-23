@@ -2302,9 +2302,8 @@ Directory the zip will be extracted to:
 
 		if (modSettingsData.CountActive() <= 0)
 		{
-			var modSettingsOrder = SavedModOrderList.FirstOrDefault();
 			var lastExported = SavedModOrderList.FirstOrDefault(x => x.Name == DivinityApp.PATH_LAST_EXPORTED_NAME);
-			if (modSettingsOrder != null && lastExported != null && lastExported.Order.Count > 0)
+			if (lastExported != null && lastExported.Order.Count > 0)
 			{
 				var doReset = await Observable.Start(() =>
 				{
@@ -2324,25 +2323,29 @@ Directory the zip will be extracted to:
 
 				if (doReset)
 				{
-					modSettingsOrder.SetOrder(lastExported);
-					SelectedModOrder.SetOrder(lastExported);
-
+					// Restore into the profile (Current) only. Writing into a saved order emptied LastExported when it was the
+					// first saved order (SetOrder on itself), and otherwise overwrote that first order.
 					List<string> orderList = [];
 					if (SelectedAdventureMod != null) orderList.Add(SelectedAdventureMod.UUID);
-					orderList.AddRange(SelectedModOrder.Order.Select(x => x.UUID));
+					orderList.AddRange(lastExported.Order.Select(x => x.UUID));
 
 					await Observable.Start(() =>
 					{
+						SelectedProfile.ActiveMods.Clear();
 						SelectedProfile.ActiveMods.AddRange(orderList.Select(ProfileActiveModDataFromUUID));
 					}, RxApp.MainThreadScheduler);
 
 					var outputPath = Path.Combine(SelectedProfile.Folder, "modsettings.lsx");
 					var finalOrder = DivinityModDataLoader.BuildOutputList(lastExported.Order, mods.Items, Settings.AutoAddDependenciesWhenExporting, SelectedAdventureMod);
-					await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder);
+					if (!await DivinityModDataLoader.ExportModSettingsToFileAsync(SelectedProfile.Folder, finalOrder))
+					{
+						ShowAlert($"Could not write the restored load order to '{outputPath}', so the game does not have it yet. Use Export Order to Game to try again.", AlertType.Danger);
+					}
 
 					await Observable.Start(() =>
 					{
-						BuildModOrderList(SelectedModOrderIndex);
+						// Index 0 is Current, rebuilt from the profile's restored mods
+						BuildModOrderList(0);
 					}, RxApp.MainThreadScheduler);
 				}
 			}
