@@ -238,6 +238,49 @@ public static class DivinityFileUtils
 	}
 	#endregion
 
+	/// <summary>
+	/// The full path that Path.Join(rootDirectory, relativePath) lands on, or null when that is outside rootDirectory, as a
+	/// name with "..\" segments taken from a mod can be. LSLib builds extraction paths with Path.Join the same way.
+	/// </summary>
+	public static string GetContainedPath(string rootDirectory, string relativePath)
+	{
+		if (String.IsNullOrWhiteSpace(rootDirectory) || String.IsNullOrWhiteSpace(relativePath)) return null;
+		try
+		{
+			var root = Path.GetFullPath(rootDirectory);
+			if (!Path.EndsInDirectorySeparator(root)) root += Path.DirectorySeparatorChar;
+			var fullPath = Path.GetFullPath(Path.Join(root, relativePath));
+			// Ordinal: a path that stays inside keeps root's exact text, while "..\mods" from "Mods" may be another folder
+			// where folder names are case-sensitive
+			if (fullPath.Length > root.Length && fullPath.StartsWith(root, StringComparison.Ordinal)) return fullPath;
+		}
+		catch (Exception ex)
+		{
+			DivinityApp.Log($"Error resolving '{relativePath}' inside '{rootDirectory}':\n{ex}");
+		}
+		return null;
+	}
+
+	/// <summary>
+	/// Extracts a pak, skipping any file whose name would land outside outputDirectory (a crafted pak can name its files
+	/// "..\..\something"). Returns false when files were skipped.
+	/// </summary>
+	private static bool UncompressPackageContained(string pakPath, string outputDirectory, Func<PackagedFileInfo, bool> filter = null)
+	{
+		var skipped = new List<string>();
+		var packager = new Packager();
+		packager.UncompressPackage(pakPath, outputDirectory, f =>
+		{
+			if (filter != null && !filter(f)) return false;
+			if (f.IsDeletion() || GetContainedPath(outputDirectory, f.Name) != null) return true;
+			skipped.Add(f.Name);
+			return false;
+		});
+		if (skipped.Count == 0) return true;
+		DivinityApp.Log($"Skipped {skipped.Count} file(s) in '{pakPath}' that would be written outside '{outputDirectory}':\n\t{String.Join("\n\t", skipped)}");
+		return false;
+	}
+
 	public static bool ExtractPackages(IEnumerable<string> pakPaths, string outputDirectory)
 	{
 		var success = 0;
@@ -254,9 +297,7 @@ public static class DivinityFileUtils
 				{
 					destination = outputDirectory;
 				}
-				var packager = new Packager();
-				packager.UncompressPackage(path, destination, null);
-				success++;
+				if (UncompressPackageContained(path, destination)) success++;
 			}
 			catch (Exception ex)
 			{
@@ -270,9 +311,7 @@ public static class DivinityFileUtils
 	{
 		try
 		{
-			var packager = new Packager();
-			packager.UncompressPackage(pakPath, outputDirectory, null);
-			return true;
+			return UncompressPackageContained(pakPath, outputDirectory);
 		}
 		catch (Exception ex)
 		{
@@ -290,9 +329,7 @@ public static class DivinityFileUtils
 			{
 				try
 				{
-					var packager = new Packager();
-					packager.UncompressPackage(pakPath, outputDirectory, filter);
-					return true;
+					return UncompressPackageContained(pakPath, outputDirectory, filter);
 				}
 				catch (Exception) { return false; }
 			}, TaskCreationOptions.AttachedToParent);

@@ -3295,9 +3295,18 @@ Directory the zip will be extracted to:
 
 								if (!outputName.Contains(mod.Name))
 								{
-									var nameFromMeta = $"{mod.Folder}.pak";
-									outputFilePath = Path.Combine(outputDirectory, nameFromMeta);
-									mod.FilePath = outputFilePath;
+									// Folder comes from the mod's own meta.lsx: use it only as a plain file name inside the Mods folder
+									var nameFromMeta = DivinityModDataLoader.MakeSafeFilename($"{mod.Folder}.pak", '_');
+									var metaOutputPath = DivinityFileUtils.GetContainedPath(outputDirectory, nameFromMeta);
+									if (!String.IsNullOrWhiteSpace(mod.Folder) && metaOutputPath != null)
+									{
+										outputFilePath = metaOutputPath;
+										mod.FilePath = outputFilePath;
+									}
+									else
+									{
+										DivinityApp.Log($"{(String.IsNullOrWhiteSpace(mod.Folder) ? "No Folder" : $"Unsafe Folder '{mod.Folder}'")} in '{filePath}', keeping the name '{outputName}'");
+									}
 								}
 								using (var fs = File.Create(outputFilePath, 4096, System.IO.FileOptions.Asynchronous))
 								{
@@ -3422,7 +3431,15 @@ Directory the zip will be extracted to:
 							if (file.Key.EndsWith(".pak", StringComparison.OrdinalIgnoreCase))
 							{
 								var outputName = Path.GetFileName(file.Key);
-								var outputFilePath = Path.Combine(outputDirectory, outputName);
+								// Entry names come from whoever made the archive: "x/D:evil.pak" gives the drive-relative "D:evil.pak",
+								// which Path.Combine would put outside the Mods folder
+								var outputFilePath = DivinityFileUtils.GetContainedPath(outputDirectory, DivinityModDataLoader.MakeSafeFilename(outputName, '_'));
+								if (outputFilePath == null)
+								{
+									taskResult.AddError(file.Key, new InvalidDataException($"'{file.Key}' would be written outside '{outputDirectory}'"));
+									DivinityApp.Log($"Skipped '{file.Key}' in '{archivePath}': it would be written outside '{outputDirectory}'");
+									continue;
+								}
 								taskResult.TotalPaks++;
 								using (var entryStream = file.OpenEntryStream())
 								{
@@ -3600,11 +3617,12 @@ Directory the zip will be extracted to:
 						}
 						else
 						{
-							var outputPackage = Path.ChangeExtension(Path.Combine(tempDir, mod.Folder), "pak");
+							// Folder and UUID come from the mod's own meta.lsx: keep the temporary pak a plain file name inside tempDir
+							var outputPackage = Path.ChangeExtension(Path.Combine(tempDir, DivinityModDataLoader.MakeSafeFilename(mod.Folder, '_')), "pak");
 							//Imported Classic Projects
 							if (!mod.Folder.Contains(mod.UUID))
 							{
-								outputPackage = Path.ChangeExtension(Path.Combine(tempDir, mod.Folder + "_" + mod.UUID), "pak");
+								outputPackage = Path.ChangeExtension(Path.Combine(tempDir, DivinityModDataLoader.MakeSafeFilename(mod.Folder + "_" + mod.UUID, '_')), "pak");
 							}
 
 							var sourceFolders = new List<string>();
