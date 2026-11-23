@@ -323,7 +323,9 @@ public static class DivinityFileUtils
 		}
 	}
 
-	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.</param>
+	/// <param name="skipped">Collects the names of entries skipped because they would be written outside outputDirectory.
+	/// When it is given, an error while extracting is thrown instead of returning false, so a caller can tell a pak that
+	/// failed apart from one whose only problem was the skipped entries.</param>
 	public static async Task<bool> ExtractPackageAsync(string pakPath, string outputDirectory, CancellationToken token, Func<PackagedFileInfo, bool>? filter = null, List<string> skipped = null)
 	{
 		var task = await Task.Run(async () =>
@@ -335,7 +337,11 @@ public static class DivinityFileUtils
 				{
 					return UncompressPackageContained(pakPath, outputDirectory, filter, skipped);
 				}
-				catch (Exception) { return false; }
+				catch (Exception)
+				{
+					if (skipped != null) throw;
+					return false;
+				}
 			}, TaskCreationOptions.AttachedToParent);
 
 			var awaiter = childTask.GetAwaiter();

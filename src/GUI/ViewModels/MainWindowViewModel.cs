@@ -4569,9 +4569,12 @@ Directory the zip will be extracted to:
 				int successes = 0;
 				// Paks with entries whose paths point outside their folder: those entries are skipped, the rest is extracted
 				var unsafePaks = new List<string>();
+				// Paks whose only problem was those skipped entries (no error while extracting the rest)
+				int skippedOnly = 0;
 				foreach (var path in SelectedPakMods.Select(x => x.FilePath))
 				{
 					if (MainProgressToken.IsCancellationRequested) break;
+					var skipped = new List<string>();
 					try
 					{
 						//Put each pak into its own folder
@@ -4584,9 +4587,9 @@ Directory the zip will be extracted to:
 						{
 							destination = outputDirectory;
 						}
-						var skipped = new List<string>();
+						// With a skipped list, an error while extracting throws, so reaching the next line means no error happened
 						var success = await DivinityFileUtils.ExtractPackageAsync(path, destination, MainProgressToken.Token, null, skipped);
-						if (skipped.Count > 0) unsafePaks.Add($"{Path.GetFileName(path)} ({skipped.Count})");
+						if (!success && skipped.Count > 0) skippedOnly += 1;
 						if (success)
 						{
 							successes += 1;
@@ -4599,6 +4602,12 @@ Directory the zip will be extracted to:
 					catch (Exception ex)
 					{
 						DivinityApp.Log($"Error extracting package: {ex}");
+					}
+					if (skipped.Count > 0)
+					{
+						// Name the skipped entries here: logging is off by default, so the log is no place to send the user
+						var names = String.Join(", ", skipped.Take(3)) + (skipped.Count > 3 ? $" and {skipped.Count - 3} more" : "");
+						unsafePaks.Add($"{Path.GetFileName(path)} ({names})");
 					}
 					IncreaseMainProgressValue(taskStepAmount);
 				}
@@ -4615,8 +4624,8 @@ Directory the zip will be extracted to:
 					}
 					else
 					{
-						var skippedText = unsafePaks.Count > 0 ? $"skipped files for safety in {String.Join(", ", unsafePaks)}: their paths point outside the folder they were extracted to (names in the log)" : "";
-						if (unsafePaks.Count > 0 && successes + unsafePaks.Count >= totalWork)
+						var skippedText = unsafePaks.Count > 0 ? $"skipped files for safety in {String.Join(", ", unsafePaks)}: their paths point outside the folder they were extracted to" : "";
+						if (skippedOnly > 0 && successes + skippedOnly >= totalWork)
 						{
 							// The only problem was the skipped entries; everything else was extracted
 							ShowAlert($"Extracted selected mods to '{dialog.SelectedPath}', but {skippedText}", AlertType.Warning, 0);
