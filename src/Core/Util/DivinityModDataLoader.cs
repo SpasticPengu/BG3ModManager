@@ -1102,11 +1102,8 @@ public static partial class DivinityModDataLoader
 
 		string contents = JsonConvert.SerializeObject(order, Newtonsoft.Json.Formatting.Indented);
 
-		var buffer = Encoding.UTF8.GetBytes(contents);
-		using (var fs = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, true))
-		{
-			await fs.WriteAsync(buffer);
-		}
+		// Written next to the file and then swapped in, so a failed write never leaves a half-written order
+		await DivinityFileUtils.WriteFileSafelyAsync(outputFilePath, Encoding.UTF8.GetBytes(contents));
 
 		order.FilePath = outputFilePath;
 
@@ -1346,10 +1343,15 @@ public static partial class DivinityModDataLoader
 				xml.WriteTo(xw);
 
 				var buffer = Encoding.UTF8.GetBytes(sw.ToString());
-				using var fs = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, true);
-				await fs.WriteAsync(buffer);
-
-				return true;
+				// Never swap in a file this app can't read back: one mod ID that isn't a GUID, or a version over 2^63,
+				// makes the whole file unreadable. The previous file is kept as modsettings.lsx.bg3mm.bak (users keep their own .bak).
+				var expected = xml.SelectNodes("//node[@id='ModuleShortDesc']/attribute[@id='UUID']/@value").Cast<XmlNode>().Count(x => !IgnoreMod(x.Value));
+				return await DivinityFileUtils.WriteFileSafelyAsync(outputFilePath, buffer, outputFilePath + ".bg3mm.bak", async tempPath =>
+				{
+					var readBack = (await LoadModSettingsFileAsync(tempPath)).ActiveMods.Count;
+					if (readBack != expected) DivinityApp.Log($"Not replacing '{outputFilePath}': only {readBack} of {expected} mods could be read back from the new file");
+					return readBack == expected;
+				});
 			}
 			catch (AccessViolationException ex)
 			{
