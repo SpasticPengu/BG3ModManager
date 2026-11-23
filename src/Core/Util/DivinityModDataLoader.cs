@@ -53,6 +53,17 @@ public static partial class DivinityModDataLoader
 	{
 		return DivinityApp.IgnoredMods.Items.Any(m => m.Folder.Equals(Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar)), SCOMP));
 	}
+	/// <summary>
+	/// Whether a mod loaded from the game's Data folder may be offered for deletion because a Mods pak has its UUID.
+	/// Never a Larian module, and never a Data pak that other loaded modules also come from (Game.pak, Gustav.pak, ...):
+	/// a user pak that reuses a game module's UUID would otherwise get the game's own pak offered for deletion.
+	/// </summary>
+	public static bool CanDeleteDataFolderDuplicate(DivinityModData baseMod, IEnumerable<DivinityModData> baseMods)
+	{
+		if (baseMod == null || baseMod.IsEditorMod || baseMod.IsLarianMod || IgnoreMod(baseMod.UUID)) return false;
+		if (String.IsNullOrEmpty(baseMod.FilePath)) return false;
+		return !baseMods.Any(x => x != baseMod && String.Equals(x.FilePath, baseMod.FilePath, SCOMP));
+	}
 
 	public static string MakeSafeFilename(string filename, char replaceChar)
 	{
